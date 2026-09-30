@@ -34,9 +34,10 @@ function fileSummary(files: FileResult[]): string {
 }
 
 function detail(d: DeviceView): { text: string; tone?: string } {
-  if (d.error === 'cancelled') return { text: 'İptal edildi', tone: 'text-fail' }
+  if (d.error === 'cancelled' || d.error?.endsWith('context canceled')) return { text: 'İptal edildi', tone: 'text-fail' }
   if (d.error) return { text: d.error, tone: 'text-fail' }
   const failed = d.files.find((f) => f.status === 'FAILED')
+  if (failed?.error === 'cancelled') return { text: 'İptal edildi', tone: 'text-fail' }
   if (failed) return { text: `${failed.remote}: ${failed.error ?? 'başarısız'}`, tone: 'text-fail' }
   if (d.files.length) return { text: fileSummary(d.files) }
   return { text: '' }
@@ -49,10 +50,10 @@ const RunRow = memo(function RunRow({ d }: { d: DeviceView }) {
   return (
     <tr className="h-11">
       <th scope="row" className="truncate border-b px-3 text-left font-mono font-normal" title={d.host}>{d.host}</th>
-      <td className="border-b px-3"><StageCell stage={d.stage} /></td>
+      <td className="truncate whitespace-nowrap border-b px-3"><StageCell stage={d.stage} /></td>
       <td className="border-b px-3">
         <div className="flex items-center gap-2">
-          <span className="w-10 font-mono text-xs tabular-nums">{d.total ? `${d.done}/${d.total}` : '-'}</span>
+          <span className="w-14 font-mono text-xs tabular-nums">{d.total ? `${d.done}/${d.total}` : '-'}</span>
           <div className="h-1 flex-1 overflow-hidden rounded-md bg-muted" aria-hidden>
             <div
               className={cn('h-full origin-left rounded-md transition-transform duration-200 ease-[var(--ease-out-strong)] motion-reduce:transition-none', d.stage === 'failed' ? 'bg-fail' : 'bg-primary')}

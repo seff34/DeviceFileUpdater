@@ -1,5 +1,5 @@
 import { StopCircle } from '@phosphor-icons/react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -9,7 +9,7 @@ import { StepPage } from '@/components/StepPage'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { navigate } from '@/lib/router'
 import { runCounts } from '@/lib/runState'
 import { deviceFailed } from '@/lib/status'
@@ -19,6 +19,7 @@ import { useRunEvents } from '@/lib/useRunEvents'
 import { useWizard } from '@/wizard/WizardContext'
 
 export function ApplyStep() {
+  const qc = useQueryClient()
   const { facts } = useWizard()
   const run = facts.run
   // A dry run (preview, or a dry run of "only failed") is never shown here.
@@ -36,10 +37,14 @@ export function ApplyStep() {
   const cancel = useMutation({
     mutationFn: api.cancelRun,
     onSuccess: () => toast('İptal ediliyor. Süren aktarımlar kesiliyor.'),
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => {
+      // 404 means no run is active any more: it finished while the dialog was open.
+      if (e instanceof ApiError && e.status === 404) void qc.invalidateQueries({ queryKey: ['run'] })
+      else toast.error((e as Error).message)
+    },
   })
   const failed = view ? runCounts(view).failed : 0
-  const gate = real && source.isPending ? 'Cihazlar yükleniyor.' : blocker('apply', facts)
+  const gate = running && source.isPending ? 'Cihazlar yükleniyor.' : blocker('apply', facts)
 
   return (
     <StepPage
@@ -58,7 +63,7 @@ export function ApplyStep() {
         only ? <p className="text-sm text-muted-foreground">Sadece <span className="font-mono">{only}</span> raporundaki başarısız cihazlar</p> : undefined
       }
     >
-      {run?.error && (
+      {real && run.error && (
         <Alert variant="destructive" className="mb-4"><AlertDescription>{run.error}</AlertDescription></Alert>
       )}
       {!real ? (
@@ -88,10 +93,10 @@ export function ApplyStep() {
         </div>
       )}
       <ConfirmDialog
-        open={confirmCancel}
+        open={confirmCancel && running}
         onOpenChange={setConfirmCancel}
         title="Çalıştırma iptal edilsin mi?"
-        description="Süren aktarımlar kesilir. Cihazdaki asıl dosyalar bozulmaz, çünkü yükleme önce geçici dosyaya yapılır. Tamamlanmamış cihazlar raporda başarısız (cancelled) görünür."
+        description="Süren aktarımlar kesilir. Cihazdaki asıl dosyalar bozulmaz, çünkü yükleme önce geçici dosyaya yapılır. Tamamlanmamış cihazlar raporda başarısız görünür."
         confirmLabel="Çalıştırmayı iptal et"
         destructive
         onConfirm={() => cancel.mutate()}

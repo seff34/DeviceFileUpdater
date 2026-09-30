@@ -80,14 +80,63 @@ describe('ApplyStep', () => {
     expect(screen.getByRole('button', { name: 'İptal et' })).toBeDisabled()
   })
 
-  it('reports a cancel failure with a toast and keeps the button usable', async () => {
+  it('treats a 404 on cancel as already finished without an error toast', async () => {
     installFakeEventSource()
-    setup({ 'DELETE /api/runs/current': () => json({ error: 'çalışan bir işlem yok' }, 409) })
+    setup({ 'DELETE /api/runs/current': () => json({ error: 'Süren bir çalışma yok.' }, 404) })
     renderWithProviders(<ApplyStep />, { path: '/apply' })
     await userEvent.click(await screen.findByRole('button', { name: 'İptal et' }))
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Çalıştırmayı iptal et' }))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('çalışan bir işlem yok'))
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true))
+    await waitFor(() => expect(calls.filter((c) => c.method === 'GET' && c.url === '/api/runs/current').length).toBeGreaterThan(1))
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('toasts other cancel failures and keeps the button usable', async () => {
+    installFakeEventSource()
+    setup({ 'DELETE /api/runs/current': () => json({ error: 'sunucu hatası' }, 500) })
+    renderWithProviders(<ApplyStep />, { path: '/apply' })
+    await userEvent.click(await screen.findByRole('button', { name: 'İptal et' }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Çalıştırmayı iptal et' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('sunucu hatası'))
     expect(screen.getByRole('button', { name: 'İptal et' })).toBeEnabled()
+  })
+
+  it('closes the confirm dialog when the run ends meanwhile', async () => {
+    const ES = installFakeEventSource()
+    renderWithProviders(<ApplyStep />, { path: '/apply' })
+    await userEvent.click(await screen.findByRole('button', { name: 'İptal et' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    run = status({ state: 'done', report_id: 'r1' })
+    await act(async () =>
+      ES.last!.emit({ type: 'run_done', done: 0, total: 0, report_id: 'r1', run: { id: 'r1', started: '', finished: '', dry_run: false, parallel: 1, files: [], devices: [] } }),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('refetches the run when the stream dies before run_done', async () => {
+    const ES = installFakeEventSource()
+    renderWithProviders(<ApplyStep />, { path: '/apply' })
+    await waitFor(() => expect(ES.last).not.toBeNull())
+    const runGets = () => calls.filter((c) => c.method === 'GET' && c.url === '/api/runs/current').length
+    const before = runGets()
+    await act(async () => ES.last!.fail())
+    await waitFor(() => expect(runGets()).toBeGreaterThan(before))
+  })
+
+  it('shows Turkish text for cancelled devices of both server shapes', async () => {
+    const ES = installFakeEventSource()
+    renderWithProviders(<ApplyStep />, { path: '/apply' })
+    await waitFor(() => expect(ES.last).not.toBeNull())
+    await act(async () => {
+      await Promise.resolve()
+      ES.last!.emit({ type: 'device_state', host: '10.0.0.1', stage: 'failed', done: 0, total: 1, error: 'connect: context canceled' })
+      ES.last!.emit({ type: 'device_state', host: '10.0.0.2', stage: 'syncing', done: 0, total: 1 })
+      ES.last!.emit({ type: 'file_result', host: '10.0.0.2', done: 1, total: 1, file: { remote: '/etc/a', status: 'FAILED', error: 'cancelled', duration_ms: 0 } })
+      await new Promise((r) => requestAnimationFrame(() => r(null)))
+    })
+    expect(within(screen.getByRole('row', { name: /10\.0\.0\.1/ })).getByText('İptal edildi')).toBeInTheDocument()
+    expect(within(screen.getByRole('row', { name: /10\.0\.0\.2/ })).getByText('İptal edildi')).toBeInTheDocument()
+    expect(screen.queryByText(/cancel(l)?ed$/)).not.toBeInTheDocument()
   })
 
   it('shows cancelled devices as cancelled and filters failed rows', async () => {

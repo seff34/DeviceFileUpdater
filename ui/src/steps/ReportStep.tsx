@@ -5,14 +5,17 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import { Link, navigate } from '@/lib/router'
+import { deviceFailed } from '@/lib/status'
 import { useWizard } from '@/wizard/WizardContext'
 
 export function ReportStep() {
   const { facts } = useWizard()
   const id = facts.run && !facts.run.dry_run ? (facts.run.report_id ?? '') : ''
   const q = useQuery({ queryKey: ['report', id], queryFn: () => api.report(id), enabled: !!id })
+  // With failures, "Başarısızları tekrar dene" in the report is the primary action.
+  const hasFailed = !!q.data?.devices.some(deviceFailed)
   return (
-    <StepPage step="report" action={{ onBack: () => navigate('/apply'), primaryLabel: 'Yeni önizleme', onPrimary: () => navigate('/preview') }}>
+    <StepPage step="report" action={{ onBack: () => navigate('/apply'), primaryLabel: 'Yeni önizleme', onPrimary: () => navigate('/preview'), primaryVariant: hasFailed ? 'outline' : 'default' }}>
       {!id && facts.run?.state === 'running' ? (
         <p className="rounded-md border bg-card p-6 text-sm text-muted-foreground">
           Uygulama sürüyor. <Link to="/apply" className="text-primary underline-offset-4 hover:underline">İlerlemeyi gör</Link>

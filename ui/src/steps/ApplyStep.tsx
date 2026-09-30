@@ -75,7 +75,7 @@ export function ApplyStep() {
       ) : !view ? (
         <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-11" />)}</div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid grid-cols-1 gap-4">
           {view.result ? (
             <p className="text-base" role="status">{resultSentence(view.result)}</p>
           ) : (

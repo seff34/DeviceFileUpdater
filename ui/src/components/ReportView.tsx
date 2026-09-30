@@ -129,7 +129,7 @@ export function ReportView({ result, reportId, allowRetry }: { result: RunResult
   const confirmBlock = loading ? 'Cihaz listesi yükleniyor.' : devices.isError ? 'Cihaz listesi okunamadı.' : retryHosts.length === 0 ? 'Başarısız cihazların hiçbiri artık devices.csv içinde değil.' : undefined
 
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-base">{resultSentence(result)}</p>

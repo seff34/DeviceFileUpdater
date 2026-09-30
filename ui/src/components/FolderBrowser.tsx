@@ -98,7 +98,7 @@ export function FolderBrowser({ onOpen, busy }: { onOpen: (path: string, create:
         <form onSubmit={create} className="flex min-w-0 flex-1 items-end gap-2">
           <div className="min-w-0 flex-1">
             <Label htmlFor="fb-new" className="mb-1 block text-xs text-muted-foreground">Yeni klasör adı</Label>
-            <Input id="fb-new" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="hat-3-guncelleme" aria-invalid={!!nameError} aria-describedby={nameError ? 'fb-new-err' : undefined} />
+            <Input id="fb-new" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="örn. hat-3-guncelleme" aria-invalid={!!nameError} aria-describedby={nameError ? 'fb-new-err' : undefined} />
             {nameError && <p id="fb-new-err" className="mt-1 text-xs text-fail">{nameError}</p>}
           </div>
           <Button type="submit" variant="outline" disabled={!cur || !newName.trim() || !!nameError || busy}>

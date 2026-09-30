@@ -66,6 +66,9 @@ describe('ApplyStep', () => {
     expect(await screen.findByText('2 cihazdan 1 tanesi başarılı, 1 tanesi başarısız. 1 dosya oluşturuldu, 1 dosya aynıydı, 2 dosya başarısız.')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: /Raporu gör/ })).toBeEnabled())
     expect(screen.queryByRole('button', { name: 'İptal et' })).not.toBeInTheDocument()
+    // A failed device counts the files that succeeded, not the ones it gave up on.
+    expect(within(screen.getByRole('row', { name: /10\.0\.0\.2/ })).getByText('0/2')).toBeInTheDocument()
+    expect(within(screen.getByRole('row', { name: /10\.0\.0\.1/ })).getByText('2/2')).toBeInTheDocument()
   })
 
   it('cancels only after confirmation', async () => {

@@ -9,11 +9,13 @@ export interface ActionConfig {
   onPrimary?: () => void
   primaryDisabled?: boolean
   primaryBusy?: boolean
+  /** outline when the page already has its own primary action */
+  primaryVariant?: 'default' | 'outline'
   blocker?: string | null
   extra?: ReactNode
 }
 
-export function ActionBar({ onBack, backLabel = 'Geri', primaryLabel = 'Devam', onPrimary, primaryDisabled, primaryBusy, blocker, extra }: ActionConfig) {
+export function ActionBar({ onBack, backLabel = 'Geri', primaryLabel = 'Devam', onPrimary, primaryDisabled, primaryBusy, primaryVariant, blocker, extra }: ActionConfig) {
   return (
     <div className="sticky bottom-0 z-10 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex max-w-6xl items-center gap-3 px-6 py-3">
@@ -33,7 +35,7 @@ export function ActionBar({ onBack, backLabel = 'Geri', primaryLabel = 'Devam', 
           )}
           {extra}
           {onPrimary && (
-            <Button onClick={onPrimary} disabled={primaryDisabled || !!blocker || primaryBusy} aria-busy={primaryBusy}>
+            <Button variant={primaryVariant} onClick={onPrimary} disabled={primaryDisabled || !!blocker || primaryBusy} aria-busy={primaryBusy}>
               {primaryLabel} <ArrowRight aria-hidden />
             </Button>
           )}

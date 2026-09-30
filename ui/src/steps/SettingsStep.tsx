@@ -111,7 +111,7 @@ export function SettingsStep() {
               id="set-post"
               value={draft.post_command}
               onChange={(e) => set({ post_command: e.target.value })}
-              placeholder="systemctl restart app"
+              placeholder="örn. systemctl restart app"
               className="font-mono"
               spellCheck={false}
               aria-describedby="set-post-help"

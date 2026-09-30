@@ -108,7 +108,7 @@ export function PreviewStep() {
       ) : !ready ? (
         <Alert variant="destructive"><AlertDescription>{(devices.error as Error | null)?.message ?? 'Cihazlar yüklenemedi.'}</AlertDescription></Alert>
       ) : previewRunning ? (
-        <div className="grid gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <RunProgress view={live} total={run?.total_devices ?? hosts.length} />
           <p className="text-sm text-muted-foreground">Cihazlara bağlanılıyor ve dosyalar karşılaştırılıyor. Önizleme cihazlarda hiçbir şeyi değiştirmez.</p>
         </div>
@@ -125,7 +125,7 @@ export function PreviewStep() {
       ) : report.isError ? (
         <Alert variant="destructive"><AlertDescription>{(report.error as Error).message}</AlertDescription></Alert>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid grid-cols-1 gap-4">
           {lastRunIncomplete && (
             <Alert className="border-warn/30 bg-warn/5">
               <WarningCircle className="text-warn" aria-hidden />

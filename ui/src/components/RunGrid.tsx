@@ -46,14 +46,16 @@ function detail(d: DeviceView): { text: string; tone?: string } {
 // applyEvent keeps the identity of untouched devices, so memo skips every row an event did not change.
 const RunRow = memo(function RunRow({ d }: { d: DeviceView }) {
   const det = detail(d)
-  const ratio = d.total ? Math.min(d.done / d.total, 1) : 0
+  // A failed device counts only the files that succeeded, so "2/2" never means two failures.
+  const done = d.stage === 'failed' ? d.files.filter((f) => f.status !== 'FAILED').length : d.done
+  const ratio = d.total ? Math.min(done / d.total, 1) : 0
   return (
     <tr className="h-11">
       <th scope="row" className="truncate border-b px-3 text-left font-mono font-normal" title={d.host}>{d.host}</th>
       <td className="truncate whitespace-nowrap border-b px-3"><StageCell stage={d.stage} /></td>
       <td className="border-b px-3">
         <div className="flex items-center gap-2">
-          <span className="w-14 font-mono text-xs tabular-nums">{d.total ? `${d.done}/${d.total}` : '-'}</span>
+          <span className="w-14 font-mono text-xs tabular-nums">{d.total ? `${done}/${d.total}` : '-'}</span>
           <div className="h-1 flex-1 overflow-hidden rounded-md bg-muted" aria-hidden>
             <div
               className={cn('h-full origin-left rounded-md transition-transform duration-200 ease-[var(--ease-out-strong)] motion-reduce:transition-none', d.stage === 'failed' ? 'bg-fail' : 'bg-primary')}

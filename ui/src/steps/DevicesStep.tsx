@@ -112,7 +112,7 @@ export function DevicesStep() {
       aside={<div className="flex items-center gap-4"><span className="text-sm tabular-nums text-muted-foreground">{draft.length} cihaz</span>{ready && <SaveIndicator state={state} error={error} />}</div>}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button onClick={add} disabled={!ready}><Plus aria-hidden /> Cihaz ekle</Button>
+        <Button variant="outline" onClick={add} disabled={!ready}><Plus aria-hidden /> Cihaz ekle</Button>
         <Button variant="outline" onClick={() => setBulkOpen(true)} disabled={!ready}><Rows aria-hidden /> Toplu ekle</Button>
         {ready ? (
           <Button variant="outline" asChild>
@@ -158,7 +158,7 @@ export function DevicesStep() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-md border bg-card">
-          <Table>
+          <Table className="min-w-[60rem] table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
@@ -169,10 +169,10 @@ export function DevicesStep() {
                   />
                 </TableHead>
                 <TableHead className="w-10 text-right">#</TableHead>
-                <TableHead className="min-w-44">IP</TableHead>
-                <TableHead className="min-w-36">Kullanıcı adı</TableHead>
-                <TableHead className="min-w-44">Şifre</TableHead>
-                <TableHead className="min-w-64">Bağlantı</TableHead>
+                <TableHead className="w-48">IP</TableHead>
+                <TableHead className="w-40">Kullanıcı adı</TableHead>
+                <TableHead className="w-56">Şifre</TableHead>
+                <TableHead>Bağlantı</TableHead>
                 <TableHead className="w-12"><span className="sr-only">İşlemler</span></TableHead>
               </TableRow>
             </TableHeader>
@@ -204,7 +204,7 @@ export function DevicesStep() {
                         aria-describedby={hostErr ? `dev-host-err-${i}` : undefined}
                         className="h-9 font-mono"
                         spellCheck={false}
-                        placeholder="10.0.0.21"
+                        placeholder="örn. 10.0.0.21"
                       />
                       {hostErr && <p id={`dev-host-err-${i}`} className="mt-1 text-xs text-fail">{hostErr}</p>}
                     </TableCell>
@@ -244,7 +244,7 @@ export function DevicesStep() {
                         </Button>
                       </div>
                     </TableCell>
-                    <TableCell className="pt-2.5"><ConnectionCell check={checks[h]} /></TableCell>
+                    <TableCell className="whitespace-normal pt-2.5"><ConnectionCell check={checks[h]} /></TableCell>
                     <TableCell>
                       <Button type="button" variant="ghost" size="icon" aria-label={`Satır ${n} sil`} onClick={() => remove(i)}>
                         <Trash aria-hidden />

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -12,15 +12,6 @@ interface Fleet {
 }
 // Written by test/e2e/fakefleet. It holds fixture passwords, so it is never printed.
 const fleet = (): Fleet => JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '.bin', 'fleet.json'), 'utf8'))
-
-// A success toast sits over the primary action button, and sonner keeps it while the pointer is on
-// it. The pointer rests where the previous "Devam" was, so park it elsewhere, wait for the toast to
-// go, then click. This polls, it does not sleep.
-const next = async (page: Page) => {
-  await page.mouse.move(0, 0)
-  await expect(page.locator('[data-sonner-toast]')).toHaveCount(0)
-  await page.getByRole('button', { name: /Devam/ }).click()
-}
 
 test('operator updates a fleet end to end without a terminal', async ({ page }) => {
   const f = fleet()
@@ -39,7 +30,7 @@ test('operator updates a fleet end to end without a terminal', async ({ page }) 
   await page.getByLabel('Yeni klasör adı').fill('hat-1')
   await page.getByRole('button', { name: 'Oluştur ve kullan' }).click()
   await expect(page.getByRole('heading', { name: 'Açık çalışma alanı' })).toBeVisible()
-  await next(page)
+  await page.getByRole('button', { name: /Devam/ }).click()
 
   // 2. Devices: bulk paste, then a connection test flags the closed port.
   await expect(page).toHaveURL(/\/devices$/)
@@ -52,7 +43,7 @@ test('operator updates a fleet end to end without a terminal', async ({ page }) 
   await expect(page.getByText(/1 cihaza bağlanılamadı/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Ulaşılamayanları çıkar' })).toBeVisible()
   await expect(page.getByText('telnet', { exact: true })).toHaveCount(healthy)
-  await next(page)
+  await page.getByRole('button', { name: /Devam/ }).click()
 
   // 3. Files: upload, folder target completes to the file name, custom mode.
   await expect(page).toHaveURL(/\/files$/)
@@ -62,13 +53,13 @@ test('operator updates a fleet end to end without a terminal', async ({ page }) 
   await remote.press('Tab')
   await expect(remote).toHaveValue('/devroot/etc/app/app.conf')
   await page.getByLabel('İzin, satır 1').fill('0640')
-  await next(page)
+  await page.getByRole('button', { name: /Devam/ }).click()
 
   // 4. Settings: shorter connect timeout keeps the unreachable device quick.
   await expect(page).toHaveURL(/\/settings$/)
   await page.getByRole('button', { name: /Gelişmiş/ }).click()
   await page.getByLabel('Bağlantı zaman aşımı (sn)').fill('2')
-  await next(page)
+  await page.getByRole('button', { name: /Devam/ }).click()
 
   // 5. Preview is mandatory and needs explicit confirmation.
   await expect(page).toHaveURL(/\/preview$/)

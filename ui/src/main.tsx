@@ -26,7 +26,7 @@ createRoot(document.getElementById('root')!).render(
         <WizardProvider>
           <App />
         </WizardProvider>
-        <Toaster position="bottom-right" />
+        <Toaster position="top-center" offset={64} />
       </TooltipProvider>
     </QueryClientProvider>
   </StrictMode>,

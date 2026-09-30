@@ -31,17 +31,31 @@ type device struct {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// run holds the work so its deferred cleanup runs on every path, including
+// errors; log.Fatal would skip defers and leave fixture passwords in $TMPDIR.
+func run() error {
 	port := flag.Int("port", 8799, "web UI port")
 	n := flag.Int("devices", 3, "number of healthy fake devices")
 	info := flag.String("info", "fleet.json", "where to write the fleet description")
 	flag.Parse()
 
 	root, err := os.MkdirTemp("", "devupdater-e2e-")
-	check(err)
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+
 	var devs []device
 	for i := 0; i < *n; i++ {
 		dir := filepath.Join(root, fmt.Sprintf("dev-%d", i))
-		check(os.MkdirAll(dir, 0o755))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
 		pass := fmt.Sprintf("e2e-pass-%d", i)
 		ln, err := testutil.ListenFakeTelnet("127.0.0.1:0", "root", pass, func(cmd string) (string, int) {
 			out, code, err := testutil.LocalShell{}.Exec(context.Background(), strings.ReplaceAll(cmd, "/devroot", dir))
@@ -50,36 +64,41 @@ func main() {
 			}
 			return out, code
 		})
-		check(err)
+		if err != nil {
+			return err
+		}
+		defer ln.Close()
 		devs = append(devs, device{ln.Addr().String(), "root", pass})
 	}
 	closed, err := net.Listen("tcp", "127.0.0.1:0")
-	check(err)
+	if err != nil {
+		return err
+	}
 	down := closed.Addr().String()
 	closed.Close()
 	devs = append(devs, device{down, "root", "e2e-pass-down"})
 
 	parent := filepath.Join(root, "workspaces")
-	check(os.MkdirAll(parent, 0o755))
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
 	srv, err := web.New(web.Options{Addr: fmt.Sprintf("127.0.0.1:%d", *port), ConfigDir: filepath.Join(root, "config"), Token: "e2e-token"})
-	check(err)
+	if err != nil {
+		return err
+	}
 	url, err := srv.Listen()
-	check(err)
+	if err != nil {
+		return err
+	}
 	b, _ := json.MarshalIndent(map[string]any{
 		"url": url, "token": srv.Token(), "root": root, "parent": parent, "devices": devs, "down": down,
 	}, "", "  ")
-	check(os.WriteFile(*info, b, 0o600))
+	if err := os.WriteFile(*info, b, 0o600); err != nil {
+		return err
+	}
 	log.Printf("fakefleet: %d devices, UI on 127.0.0.1:%d", len(devs), *port)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	err = srv.Serve(ctx)
-	os.RemoveAll(root)
-	check(err)
-}
-
-func check(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
+	return srv.Serve(ctx)
 }

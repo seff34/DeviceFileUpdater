@@ -11,6 +11,8 @@ interface Fleet {
   devices: { host: string; username: string; password: string }[]
 }
 // Written by test/e2e/fakefleet. It holds fixture passwords, so it is never printed.
+// Matches a table row whose name starts with this host and not a longer port with the same prefix.
+const rowOf = (host: string) => new RegExp(`^${host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\d)`)
 const fleet = (): Fleet => JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '.bin', 'fleet.json'), 'utf8'))
 
 test('operator updates a fleet end to end without a terminal', async ({ page }) => {
@@ -59,6 +61,11 @@ test('operator updates a fleet end to end without a terminal', async ({ page }) 
   await expect(page).toHaveURL(/\/settings$/)
   await page.getByRole('button', { name: /Gelişmiş/ }).click()
   await page.getByLabel('Bağlantı zaman aşımı (sn)').fill('2')
+  await expect(page.getByText('Kaydedildi')).toBeVisible()
+  // The value reached the server: it survives a reload.
+  await page.reload()
+  await page.getByRole('button', { name: /Gelişmiş/ }).click()
+  await expect(page.getByLabel('Bağlantı zaman aşımı (sn)')).toHaveValue('2')
   await page.getByRole('button', { name: /Devam/ }).click()
 
   // 5. Preview is mandatory and needs explicit confirmation.
@@ -74,6 +81,11 @@ test('operator updates a fleet end to end without a terminal', async ({ page }) 
   // 6. Apply streams to completion.
   await expect(page).toHaveURL(/\/apply$/)
   await expect(page.getByText(`${f.devices.length} cihazdan ${healthy} tanesi başarılı, 1 tanesi başarısız.`, { exact: false })).toBeVisible({ timeout: 90_000 })
+  // The live grid keeps every row: the down host failed, a healthy one is done with its file created.
+  await expect(page.getByRole('row', { name: rowOf(f.down) })).toContainText('Başarısız')
+  const live = page.getByRole('row', { name: rowOf(f.devices[0].host) })
+  await expect(live).toContainText('Tamamlandı')
+  await expect(live).toContainText('1 oluşturuldu')
   for (let i = 0; i < healthy; i++) {
     const p = path.join(f.root, `dev-${i}`, 'etc', 'app', 'app.conf')
     expect(fs.readFileSync(p, 'utf8')).toBe('v=1\n')
@@ -83,6 +95,8 @@ test('operator updates a fleet end to end without a terminal', async ({ page }) 
 
   // 7. Report: failure visible, retry asks first and counts hosts, HTML report has no passwords.
   await expect(page).toHaveURL(/\/report$/)
+  await expect(page.getByRole('row', { name: rowOf(f.down) })).toContainText('Başarısız')
+  await expect(page.getByRole('row', { name: rowOf(f.devices[0].host) })).toContainText('Başarılı')
   await page.getByRole('button', { name: /Başarısızları tekrar dene/ }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toContainText(`Yalnızca 1 cihazda yeni bir uygulama başlatılır: ${f.down}`)
@@ -105,9 +119,10 @@ test('operator updates a fleet end to end without a terminal', async ({ page }) 
 
   // 9. History lists all three runs, newest first.
   await page.getByRole('link', { name: /Geçmiş raporlar/ }).click()
-  const runs = page.getByRole('link', { name: /Önizleme|Uygulama/ })
+  const runs = page.getByRole('main').getByRole('list').getByRole('link')
   await expect(runs).toHaveCount(3)
   await expect(runs.first()).toContainText('Önizleme')
+  await expect(runs.filter({ hasText: 'Uygulama' })).toContainText('1 başarısız')
 })
 
 test('a session without the token is refused', async ({ browser }) => {

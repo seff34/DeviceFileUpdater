@@ -82,6 +82,9 @@ func ListenFakeTelnet(addr, user, pass string, handler func(cmd string) (string,
 				return
 			}
 			go func() {
+				// The peek waits up to 300ms for client bytes before the greeting is
+				// sent. The delay is deliberate: a Telnet client sends nothing first,
+				// so only an SSH client is identified (and dropped) by these bytes.
 				r := bufio.NewReader(c)
 				c.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
 				if b, _ := r.Peek(4); string(b) == "SSH-" {

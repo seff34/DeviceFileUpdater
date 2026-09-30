@@ -114,9 +114,11 @@ func TestDialContextCancelledDuringRetry(t *testing.T) {
 	// Verify Dial returns context.Canceled error quickly.
 	var sshCalls int
 	oldDialSSH := dialSSH
+	oldDialTelnet := dialTelnet
 	oldRetryDelay := retryDelay
 	t.Cleanup(func() {
 		dialSSH = oldDialSSH
+		dialTelnet = oldDialTelnet
 		retryDelay = oldRetryDelay
 	})
 

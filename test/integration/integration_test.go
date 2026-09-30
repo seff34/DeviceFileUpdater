@@ -100,6 +100,9 @@ func TestDeviceMatrix(t *testing.T) {
 			if d.Protocol != c.proto || d.HashMethod != c.hash {
 				t.Fatalf("protocol/hash: %s/%s", d.Protocol, d.HashMethod)
 			}
+			if got := exec(t, c.host, "ls /data/app/bin.dat /data/conf.txt /data/app/*.devupd.tmp /data/*.devupd.tmp 2>/dev/null | wc -l"); strings.TrimSpace(got) != "0" {
+				t.Fatalf("dry-run wrote files: %s", got)
+			}
 
 			d = run(c.host, files, false, "")
 			if statuses(d)[0] != model.Created || statuses(d)[1] != model.Created || d.UploadMethod != c.upload {

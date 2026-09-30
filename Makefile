@@ -1,6 +1,6 @@
 TARGETS := linux/amd64 linux/arm64 linux/arm windows/amd64 windows/arm64 darwin/amd64 darwin/arm64
 
-.PHONY: test integration release ui
+.PHONY: test integration release ui e2e
 
 test:
 	go vet ./...
@@ -12,6 +12,9 @@ integration:
 
 ui:
 	cd ui && npm ci && npm run build
+
+e2e: ui
+	cd ui && npx playwright test
 
 release: ui
 	rm -rf dist && mkdir -p dist

@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 )
 
 // StartFakeTelnet serves a busybox-like telnet login followed by a fake shell.
@@ -29,16 +30,15 @@ func StartFakeTelnetMOTD(t *testing.T, user, pass, motd string, handler func(cmd
 			if err != nil {
 				return
 			}
-			go serveTelnet(c, user, pass, motd, handler)
+			go serveTelnet(c, bufio.NewReader(c), user, pass, motd, handler)
 		}
 	}()
 	return ln.Addr().String()
 }
 
-func serveTelnet(c net.Conn, user, pass, motd string, handler func(string) (string, int)) {
+func serveTelnet(c net.Conn, r *bufio.Reader, user, pass, motd string, handler func(string) (string, int)) {
 	defer c.Close()
 	c.Write([]byte{255, 253, 1}) // IAC DO ECHO — client must filter and answer
-	r := bufio.NewReader(c)
 	readLine := func() (string, error) {
 		s, err := r.ReadString('\n')
 		// drop any IAC replies (3-byte sequences) that precede text
@@ -65,4 +65,33 @@ func serveTelnet(c net.Conn, user, pass, motd string, handler func(string) (stri
 	}
 	io.WriteString(c, "\r\n"+motd+"~ $ ")
 	ServeFakeShell(r, c, true, handler)
+}
+
+// ListenFakeTelnet is StartFakeTelnet for programs without a *testing.T (the
+// e2e fake fleet). A client whose first bytes are "SSH-" is dropped at once,
+// so a tool that dials SSH first falls back to Telnet without a timeout.
+func ListenFakeTelnet(addr, user, pass string, handler func(cmd string) (string, int)) (net.Listener, error) {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				r := bufio.NewReader(c)
+				c.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+				if b, _ := r.Peek(4); string(b) == "SSH-" {
+					c.Close()
+					return
+				}
+				c.SetReadDeadline(time.Time{})
+				serveTelnet(c, r, user, pass, "", handler)
+			}()
+		}
+	}()
+	return ln, nil
 }

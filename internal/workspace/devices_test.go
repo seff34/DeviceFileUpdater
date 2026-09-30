@@ -80,3 +80,15 @@ func TestParseDevicesWithBOM(t *testing.T) {
 		t.Fatalf("got %+v", ds)
 	}
 }
+
+// Excel in many locales saves "CSV" with ';' separators; detect it from the header.
+func TestParseDevicesSemicolon(t *testing.T) {
+	in := "\xef\xbb\xbfip;username;password\r\n10.0.0.1;root;pa,ss\r\n10.0.0.2:2222;admin;\"x;y\"\r\n"
+	ds, err := ParseDevices(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ds) != 2 || ds[0].Password != "pa,ss" || ds[1].Host != "10.0.0.2:2222" || ds[1].Password != "x;y" {
+		t.Fatalf("got %+v", ds)
+	}
+}

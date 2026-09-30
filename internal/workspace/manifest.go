@@ -86,6 +86,9 @@ func ValidateEntries(es []Entry) error {
 		if !strings.HasPrefix(e.RemotePath, "/") {
 			return fmt.Errorf("manifest row %d: remote_path must be absolute: %q", n, e.RemotePath)
 		}
+		if strings.IndexFunc(e.RemotePath, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+			return fmt.Errorf("manifest row %d: remote_path contains a control character: %q", n, e.RemotePath)
+		}
 		if e.Mode != "" && !modeRe.MatchString(e.Mode) {
 			return fmt.Errorf("manifest row %d: mode must be octal like 0644: %q", n, e.Mode)
 		}

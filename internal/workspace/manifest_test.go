@@ -3,6 +3,7 @@ package workspace
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +69,18 @@ func TestLoadManifestWithBOM(t *testing.T) {
 	}
 	if len(es) != 1 || es[0].LocalPath != "files/a.txt" {
 		t.Fatalf("got %+v", es)
+	}
+}
+
+// Control bytes in remote_path would corrupt the line-based shell protocol.
+func TestRemotePathControlBytesRejected(t *testing.T) {
+	for _, p := range []string{"/a\nb", "/a\rb", "/a\x00b", "/a\tb", "/a\x1b[2Jb", "/a\x7fb"} {
+		err := ValidateEntries([]Entry{{LocalPath: "a", RemotePath: p}})
+		if err == nil || !strings.Contains(err.Error(), "control character") {
+			t.Errorf("%q: err = %v", p, err)
+		}
+	}
+	if err := ValidateEntries([]Entry{{LocalPath: "a", RemotePath: "/opt/app dir/ü.conf"}}); err != nil {
+		t.Fatal(err)
 	}
 }

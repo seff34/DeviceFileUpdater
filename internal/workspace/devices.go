@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -36,7 +37,16 @@ func (d Device) HostOnly() string {
 var deviceHeader = []string{"ip", "username", "password"}
 
 func ParseDevices(r io.Reader) ([]Device, error) {
-	cr := csv.NewReader(r)
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("devices.csv: %w", err)
+	}
+	cr := csv.NewReader(bytes.NewReader(data))
+	// Excel in many locales saves CSV with ';'. A header with ';' and no ','
+	// can only be that form, so switch separators.
+	if header, _, _ := strings.Cut(string(data), "\n"); strings.Contains(header, ";") && !strings.Contains(header, ",") {
+		cr.Comma = ';'
+	}
 	cr.FieldsPerRecord = 3
 	rows, err := cr.ReadAll()
 	if err != nil {

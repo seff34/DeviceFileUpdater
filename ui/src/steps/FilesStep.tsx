@@ -18,6 +18,23 @@ import { cn } from '@/lib/utils'
 import { validateManifest } from '@/lib/validate'
 
 const strip = (rows: ManifestRow[]) => rows.map(({ local_path, remote_path, mode }) => ({ local_path, remote_path, mode }))
+// The server caps one upload request at 4 GiB (maxUploadBytes in internal/web/data_api.go).
+const MAX_UPLOAD_BYTES = 4 * 1024 ** 3
+
+// Stable React keys per row, kept outside the saved data. Edits create new row
+// objects, so the key is carried over with `keep`.
+const rowKeys = new WeakMap<ManifestRow, number>()
+let nextKey = 0
+const keyOf = (r: ManifestRow) => {
+  let k = rowKeys.get(r)
+  if (k === undefined) rowKeys.set(r, (k = nextKey++))
+  return k
+}
+const keep = (from: ManifestRow, to: ManifestRow) => {
+  rowKeys.set(to, keyOf(from))
+  return to
+}
+
 const rowsValid = (rows: ManifestRow[]) => validateManifest(rows).every((e) => e === null) && rows.every((r) => r.file.exists)
 
 export function FilesStep() {
@@ -33,6 +50,7 @@ export function FilesStep() {
   const [touched, setTouched] = useState<Set<string>>(new Set())
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const zoneRef = useRef<HTMLDivElement>(null)
   const ready = q.isSuccess
 
   const upload = useMutation({
@@ -43,7 +61,7 @@ export function FilesStep() {
       for (const u of up) {
         const file = { exists: true, size: u.size, sha256: u.sha256 }
         const i = merged.findIndex((r) => r.local_path === u.local_path)
-        if (i >= 0) merged[i] = { ...merged[i], file }
+        if (i >= 0) merged[i] = keep(merged[i], { ...merged[i], file })
         else {
           if (firstNew < 0) firstNew = merged.length
           merged.push({ local_path: u.local_path, remote_path: '', mode: '', file })
@@ -53,15 +71,33 @@ export function FilesStep() {
       void qc.invalidateQueries({ queryKey: ['run'] })
       const replaced = up.filter((u) => u.replaced).length
       toast.success(replaced > 0 ? `${up.length} dosya yüklendi, ${replaced} tanesi eskisinin yerine geçti.` : `${up.length} dosya yüklendi.`)
-      if (firstNew >= 0) requestAnimationFrame(() => document.getElementById(`mf-remote-${firstNew}`)?.focus())
+      if (firstNew >= 0)
+        requestAnimationFrame(() => {
+          // Do not steal focus if the operator moved on while the upload ran.
+          const a = document.activeElement
+          if (a === document.body || a === null || zoneRef.current?.contains(a)) document.getElementById(`mf-remote-${firstNew}`)?.focus()
+        })
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => {
+      // A failed request may still have written some files; re-read the server state.
+      void qc.invalidateQueries({ queryKey: ['manifest'] })
+      toast.error(`Bazı dosyalar sunucuya yazılmış olabilir. ${(e as Error).message}`)
+    },
   })
 
   const canUpload = ready && !upload.isPending
   const pick = (list: FileList | null) => {
     const files = list ? Array.from(list) : []
-    if (files.length && canUpload) upload.mutate(files)
+    if (!files.length || !canUpload) return
+    let total = 0
+    for (const f of files) {
+      total += f.size
+      if (total > MAX_UPLOAD_BYTES) {
+        toast.error(`${f.name} yüklenemedi: tek seferde en fazla ${formatBytes(MAX_UPLOAD_BYTES)} yüklenebilir. Dosyaları daha küçük gruplar halinde yükleyin.`)
+        return
+      }
+    }
+    upload.mutate(files)
   }
   const onDrop = (e: DragEvent) => {
     e.preventDefault()
@@ -69,7 +105,7 @@ export function FilesStep() {
     pick(e.dataTransfer.files)
   }
 
-  const update = (i: number, patch: Partial<ManifestRow>) => setDraft(draft.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  const update = (i: number, patch: Partial<ManifestRow>) => setDraft(draft.map((r, j) => (j === i ? keep(r, { ...r, ...patch }) : r)))
   const remove = (i: number) => {
     setDraft(draft.filter((_, j) => j !== i))
     setTouched(new Set())
@@ -88,12 +124,15 @@ export function FilesStep() {
   }
 
   const totalSize = draft.reduce((n, r) => n + r.file.size, 0)
-  const blocker =
-    draft.length === 0
-      ? 'En az bir dosya ekleyin.'
-      : !rowsValid(draft)
-        ? 'Dosya satırlarındaki hataları düzeltin.'
-        : saveBlocker(state, error)
+  const blocker = q.isPending
+    ? 'Dosya listesi yükleniyor.'
+    : q.isError
+      ? 'Dosya listesi yüklenemedi.'
+      : draft.length === 0
+        ? 'En az bir dosya ekleyin.'
+        : !rowsValid(draft)
+          ? 'Dosya satırlarındaki hataları düzeltin.'
+          : saveBlocker(state, error)
 
   return (
     <StepPage
@@ -108,9 +147,10 @@ export function FilesStep() {
     >
       <div
         data-dropzone
+        ref={zoneRef}
         onDragOver={(e) => {
           e.preventDefault()
-          if (canUpload) setDragging(true)
+          if (canUpload && Array.from(e.dataTransfer.types ?? []).includes('Files')) setDragging(true)
         }}
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
@@ -185,7 +225,7 @@ export function FilesStep() {
                 const remoteErr = fieldError(i, 'remote_path')
                 const modeErr = fieldError(i, 'mode')
                 return (
-                  <TableRow key={r.local_path + i} className="align-top">
+                  <TableRow key={keyOf(r)} className="align-top">
                     <TableCell className="pt-3.5 text-right font-mono text-xs text-muted-foreground">{n}</TableCell>
                     <TableCell className="pt-2.5">
                       <p className="truncate font-mono text-sm" title={r.local_path}>{baseName(r.local_path)}</p>

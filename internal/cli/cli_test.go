@@ -31,9 +31,6 @@ func setupWS(t *testing.T) string {
 
 func TestUsageAndConfigErrors(t *testing.T) {
 	var out, errb bytes.Buffer
-	if code := Main(nil, &out, &errb); code != 2 {
-		t.Fatalf("no args: %d", code)
-	}
 	if code := Main([]string{"bogus"}, &out, &errb); code != 2 {
 		t.Fatalf("unknown subcommand: %d", code)
 	}

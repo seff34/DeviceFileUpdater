@@ -16,11 +16,15 @@ import (
 	"devupdater/internal/model"
 	"devupdater/internal/report"
 	"devupdater/internal/runner"
+	"devupdater/internal/web"
 	"devupdater/internal/workspace"
 )
 
 const usage = `usage:
+  devupdater ui  [-workspace DIR] [-port N] [-no-browser]
   devupdater run [-workspace DIR] [-dry-run] [-parallel N] [-only-failed REPORT_ID]
+
+Argümansız çalıştırma arayüzü (ui) açar.
 `
 
 // runJob is a seam so tests can substitute the runner.
@@ -33,11 +37,74 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usage)
 		return 0
 	}
-	if len(args) == 0 || args[0] != "run" {
-		fmt.Fprint(stderr, usage)
+	if len(args) == 0 {
+		return uiCmd(nil, stdout, stderr)
+	}
+	switch args[0] {
+	case "ui":
+		return uiCmd(args[1:], stdout, stderr)
+	case "run":
+		return runCmd(args[1:], stdout, stderr)
+	}
+	fmt.Fprint(stderr, usage)
+	return 2
+}
+
+var serveUI = func(ctx context.Context, srv *web.Server) error { return srv.Serve(ctx) }
+
+func uiCmd(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("ui", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	dir := fs.String("workspace", "", "workspace folder to open at start")
+	port := fs.Int("port", 0, "port on 127.0.0.1 (0 = random)")
+	noBrowser := fs.Bool("no-browser", false, "do not open a browser")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
-	return runCmd(args[1:], stdout, stderr)
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "error: unexpected argument %q\n%s", fs.Arg(0), usage)
+		return 2
+	}
+	if *port < 0 || *port > 65535 {
+		fmt.Fprintln(stderr, "error: -port must be 0..65535")
+		return 2
+	}
+	ws := *dir
+	if ws != "" {
+		abs, err := filepath.Abs(ws)
+		if err != nil {
+			fmt.Fprintln(stderr, "error:", err)
+			return 2
+		}
+		ws = abs
+	}
+	srv, err := web.New(web.Options{Workspace: ws, Addr: fmt.Sprintf("127.0.0.1:%d", *port)})
+	if err != nil {
+		fmt.Fprintln(stderr, "error:", err)
+		return 2
+	}
+	url, err := srv.Listen()
+	if err != nil {
+		fmt.Fprintln(stderr, "error:", err)
+		return 2
+	}
+	fmt.Fprintln(stdout, "DeviceFileUpdater arayüzü:", url)
+	fmt.Fprintln(stdout, "Kapatmak için Ctrl+C.")
+	if !*noBrowser {
+		if err := openBrowser(url); err != nil {
+			fmt.Fprintln(stderr, "Tarayıcı açılamadı, adresi elle açın:", err)
+		}
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := serveUI(ctx, srv); err != nil {
+		fmt.Fprintln(stderr, "error:", err)
+		return 1
+	}
+	return 0
 }
 
 // checkReportID mirrors report.Save's safety rules so a user-supplied ID can

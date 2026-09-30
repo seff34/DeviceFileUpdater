@@ -55,3 +55,29 @@ export function renderWithProviders(ui: ReactElement, { path = '/' }: { path?: s
   )
   return { ...r, qc }
 }
+
+/** Stand-in for EventSource. `setup.ts` unstubs globals after every test. */
+export class FakeEventSource {
+  static CLOSED = 2
+  static last: FakeEventSource | null = null
+  readyState = 1
+  onopen: (() => void) | null = null
+  onmessage: ((m: { data: string }) => void) | null = null
+  onerror: (() => void) | null = null
+  constructor(public url: string) {
+    FakeEventSource.last = this
+    queueMicrotask(() => this.onopen?.())
+  }
+  emit(e: unknown) {
+    this.onmessage?.({ data: JSON.stringify(e) })
+  }
+  close() {
+    this.readyState = FakeEventSource.CLOSED
+  }
+}
+
+export function installFakeEventSource() {
+  FakeEventSource.last = null
+  vi.stubGlobal('EventSource', FakeEventSource)
+  return FakeEventSource
+}

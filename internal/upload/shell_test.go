@@ -31,7 +31,7 @@ func TestShellUploadersRoundTrip(t *testing.T) {
 		NewShellBase64(testutil.LocalShell{}, 5*time.Second),
 		NewShellPrintf(testutil.LocalShell{}, 5*time.Second),
 	} {
-		for _, data := range [][]byte{allBytes(), {}, []byte("-leading dash")} {
+		for _, data := range [][]byte{allBytes(), {}, []byte("-leading dash"), []byte(" 5-1%0 9\x0012\n7")} {
 			dst := filepath.Join(t.TempDir(), "sub dir", "out.bin")
 			os.MkdirAll(filepath.Dir(dst), 0o755)
 			// pre-existing longer content must be truncated
@@ -119,5 +119,86 @@ func TestUploadHonoursCancel(t *testing.T) {
 	err := NewShellPrintf(testutil.LocalShell{}, time.Second).Upload(ctx, []byte("x"), filepath.Join(t.TempDir(), "o"))
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func longPath() string {
+	return "/" + strings.Repeat("d", 120) + "/" + strings.Repeat("f", 120) + ".bin"
+}
+
+func TestLongPathCommandsStayShort(t *testing.T) {
+	remote := longPath()
+	for _, u := range []func(*testutil.FakeSession) Uploader{
+		func(s *testutil.FakeSession) Uploader { return NewShellBase64(s, time.Second) },
+		func(s *testutil.FakeSession) Uploader { return NewShellPrintf(s, time.Second) },
+	} {
+		s := &testutil.FakeSession{Handler: func(string) (string, int) { return "", 0 }}
+		up := u(s)
+		if err := up.Upload(context.Background(), allBytes(), remote); err != nil {
+			t.Fatalf("%s: %v", up.Name(), err)
+		}
+		if len(s.Cmds) < 3 {
+			t.Fatalf("%s: expected chunking", up.Name())
+		}
+		for _, c := range s.Cmds {
+			if len(c) > 1024-marginLen {
+				t.Fatalf("%s: command too long: %d", up.Name(), len(c))
+			}
+		}
+	}
+}
+
+func TestLongPathRoundTrip(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), strings.Repeat("d", 120))
+	os.MkdirAll(dir, 0o755)
+	dst := filepath.Join(dir, strings.Repeat("f", 100)+".bin")
+	for _, u := range []Uploader{NewShellBase64(testutil.LocalShell{}, 5*time.Second), NewShellPrintf(testutil.LocalShell{}, 5*time.Second)} {
+		if err := u.Upload(context.Background(), allBytes(), dst); err != nil {
+			t.Fatalf("%s: %v", u.Name(), err)
+		}
+		got, _ := os.ReadFile(dst)
+		if !bytes.Equal(got, allBytes()) {
+			t.Fatalf("%s: mismatch", u.Name())
+		}
+	}
+}
+
+func TestPathTooLongRejectedBeforeSending(t *testing.T) {
+	s := &testutil.FakeSession{Handler: func(string) (string, int) { return "", 0 }}
+	remote := "/" + strings.Repeat("x", 1000)
+	for _, u := range []Uploader{NewShellBase64(s, time.Second), NewShellPrintf(s, time.Second)} {
+		if err := u.Upload(context.Background(), []byte("a"), remote); err == nil || !strings.Contains(err.Error(), "too long") {
+			t.Fatalf("%s: got %v", u.Name(), err)
+		}
+	}
+	if len(s.Cmds) != 0 {
+		t.Fatalf("commands sent: %d", len(s.Cmds))
+	}
+}
+
+// errSession fails Exec at transport level for commands containing failOn.
+type errSession struct {
+	testutil.FakeSession
+	failOn string
+}
+
+func (e *errSession) Exec(ctx context.Context, cmd string) (string, int, error) {
+	out, code, _ := e.FakeSession.Exec(ctx, cmd)
+	if e.failOn != "" && strings.Contains(cmd, e.failOn) {
+		return "", -1, errors.New("link down")
+	}
+	return out, code, nil
+}
+
+func TestBase64CleansUpOnTransportError(t *testing.T) {
+	for _, failOn := range []string{": > ", "printf '%s'", "base64 -d"} {
+		s := &errSession{FakeSession: testutil.FakeSession{Handler: func(string) (string, int) { return "", 0 }}, failOn: failOn}
+		err := NewShellBase64(s, time.Second).Upload(context.Background(), []byte("hello"), "/x")
+		if err == nil || !strings.Contains(err.Error(), "link down") {
+			t.Fatalf("%s: got %v", failOn, err)
+		}
+		if last := s.Cmds[len(s.Cmds)-1]; last != "rm -f '/x.b64'" {
+			t.Fatalf("%s: last cmd %q", failOn, last)
+		}
 	}
 }

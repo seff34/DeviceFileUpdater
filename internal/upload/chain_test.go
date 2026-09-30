@@ -84,3 +84,22 @@ func TestChainConcurrentUse(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+type cancelUp struct{ cancel context.CancelFunc }
+
+func (cancelUp) Name() string { return "c" }
+func (u cancelUp) Upload(context.Context, []byte, string) error {
+	u.cancel()
+	return errors.New("aborted")
+}
+
+func TestChainCancelDuringUploadNotMarkedBroken(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	c := NewChain([]Uploader{cancelUp{cancel}, &fakeUp{name: "b"}})
+	if _, err := c.Upload(ctx, nil, "/t"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+	if c.Primary() != "c" {
+		t.Fatalf("primary changed to %q", c.Primary())
+	}
+}

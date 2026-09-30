@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,8 +12,26 @@ import (
 	"devupdater/internal/transport"
 )
 
-// Keeps every command line under the 1024-byte limit including quoting and path.
-const maxPayload = 700
+const (
+	// maxPayload caps the data carried by one command.
+	maxPayload = 700
+	// maxCmdLen is the device limit for one command line; marginLen reserves room for
+	// the marker suffix added by the transport.
+	maxCmdLen = 1024
+	marginLen = 64
+	minBudget = 64
+)
+
+var errPathTooLong = errors.New("remote path too long for shell upload")
+
+// budget returns how many payload bytes fit next to fixedLen bytes of other command text.
+func budget(fixedLen int) (int, error) {
+	n := min(maxPayload, maxCmdLen-marginLen-fixedLen)
+	if n < minBudget {
+		return 0, errPathTooLong
+	}
+	return n, nil
+}
 
 type shellBase64 struct {
 	s       transport.Session
@@ -28,21 +47,38 @@ func (u *shellBase64) Name() string { return "shell-base64" }
 func (u *shellBase64) Upload(ctx context.Context, data []byte, remote string) error {
 	b64 := shell.Quote(remote + ".b64")
 	dst := shell.Quote(remote)
-	if err := run(ctx, u.s, u.timeout, "truncate", ": > "+b64); err != nil {
+	truncate := ": > " + b64
+	// Decode and cleanup are separate commands so each stays short with long paths.
+	decode := "base64 -d < " + b64 + " > " + dst
+	// "printf '%s' '" + chunk + "' >> " + b64
+	n, err := budget(len("printf '%s' '' >> ") + len(b64))
+	if err != nil {
 		return err
+	}
+	if len(truncate) > maxCmdLen-marginLen || len(decode) > maxCmdLen-marginLen {
+		return errPathTooLong
+	}
+	// From here on the .b64 file may exist; any failure gets one best-effort cleanup that
+	// still runs after ctx cancellation.
+	fail := func(err error) error {
+		_ = run(context.WithoutCancel(ctx), u.s, u.timeout, "cleanup", "rm -f "+b64)
+		return err
+	}
+	if err := run(ctx, u.s, u.timeout, "truncate", truncate); err != nil {
+		return fail(err)
 	}
 	enc := base64.StdEncoding.EncodeToString(data)
 	for len(enc) > 0 {
-		n := min(maxPayload, len(enc))
-		if err := run(ctx, u.s, u.timeout, "write chunk", "printf '%s' "+shell.Quote(enc[:n])+" >> "+b64); err != nil {
-			// Best-effort cleanup that still runs after ctx cancellation; its error is secondary.
-			_ = run(context.WithoutCancel(ctx), u.s, u.timeout, "cleanup", "rm -f "+b64)
-			return err
+		k := min(n, len(enc))
+		if err := run(ctx, u.s, u.timeout, "write chunk", "printf '%s' "+shell.Quote(enc[:k])+" >> "+b64); err != nil {
+			return fail(err)
 		}
-		enc = enc[n:]
+		enc = enc[k:]
 	}
-	return run(ctx, u.s, u.timeout, "base64 decode",
-		fmt.Sprintf("if base64 -d < %s > %s; then rm -f %s; else rm -f %s; false; fi", b64, dst, b64, b64))
+	if err := run(ctx, u.s, u.timeout, "base64 decode", decode); err != nil {
+		return fail(err)
+	}
+	return run(ctx, u.s, u.timeout, "remove temp", "rm -f "+b64)
 }
 
 type shellPrintf struct {
@@ -69,6 +105,11 @@ func (u *shellPrintf) Upload(ctx context.Context, data []byte, remote string) er
 	if len(data) == 0 {
 		return run(ctx, u.s, u.timeout, "truncate", ": > "+dst)
 	}
+	// "printf '" + chunk + "' >> " + dst
+	limit, err := budget(len("printf '' >> ") + len(dst))
+	if err != nil {
+		return err
+	}
 	redirect := ">"
 	var chunk strings.Builder
 	flush := func() error {
@@ -79,7 +120,7 @@ func (u *shellPrintf) Upload(ctx context.Context, data []byte, remote string) er
 	}
 	for _, b := range data {
 		e := printfEscape(b)
-		if chunk.Len()+len(e) > maxPayload {
+		if chunk.Len()+len(e) > limit {
 			if err := flush(); err != nil {
 				return err
 			}

@@ -47,3 +47,15 @@ func TestSSHBadPassword(t *testing.T) {
 		t.Fatalf("expected ErrAuth, got %v", err)
 	}
 }
+
+func TestIsSSHAuthError(t *testing.T) {
+	for msg, want := range map[string]bool{
+		"ssh: handshake failed: ssh: unable to authenticate, attempted methods [none password]": true,
+		"ssh: handshake failed: ssh: unexpected message type 51 (expected 60)":                  true,
+		"ssh: handshake failed: EOF": false,
+	} {
+		if got := isSSHAuthError(errors.New(msg)); got != want {
+			t.Errorf("%q: got %v want %v", msg, got, want)
+		}
+	}
+}

@@ -126,3 +126,26 @@ func TestIACReaderNegotiationOnlyDoesNotReturnEmpty(t *testing.T) {
 		t.Fatalf("n=%d err=%v buf=%v", n, err, buf[:n])
 	}
 }
+
+// busybox ash appends a cursor-position query (ESC[6n) after its prompt; it
+// must not reach the prompt matcher, even when split across reads.
+func TestIACReaderStripsANSIEscapes(t *testing.T) {
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+	drain(b)
+	go func() {
+		for _, x := range []byte("ab:~$ \x1b[6n\x1b[1;32mX\x1b7Y") {
+			b.Write([]byte{x})
+		}
+	}()
+	r := &iacReader{c: a}
+	want := []byte("ab:~$ XY")
+	got := make([]byte, len(want))
+	if _, err := io.ReadFull(r, got); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}

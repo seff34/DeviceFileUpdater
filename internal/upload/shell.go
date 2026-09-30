@@ -47,7 +47,7 @@ func (u *shellBase64) Name() string { return "shell-base64" }
 func (u *shellBase64) Upload(ctx context.Context, data []byte, remote string) error {
 	b64 := shell.Quote(remote + ".b64")
 	dst := shell.Quote(remote)
-	truncate := ": > " + b64
+	truncate := "true > " + b64
 	// Decode and cleanup are separate commands so each stays short with long paths.
 	decode := "base64 -d < " + b64 + " > " + dst
 	// "printf '%s' '" + chunk + "' >> " + b64
@@ -103,7 +103,7 @@ func printfEscape(b byte) string {
 func (u *shellPrintf) Upload(ctx context.Context, data []byte, remote string) error {
 	dst := shell.Quote(remote)
 	if len(data) == 0 {
-		return run(ctx, u.s, u.timeout, "truncate", ": > "+dst)
+		return run(ctx, u.s, u.timeout, "truncate", "true > "+dst)
 	}
 	// "printf '" + chunk + "' >> " + dst
 	limit, err := budget(len("printf '' >> ") + len(dst))

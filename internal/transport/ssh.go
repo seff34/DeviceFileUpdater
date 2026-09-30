@@ -63,7 +63,7 @@ func DialSSH(ctx context.Context, addr, user, pass string, opt Options) (Session
 	c, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
 	if err != nil {
 		conn.Close()
-		if strings.Contains(err.Error(), "unable to authenticate") {
+		if isSSHAuthError(err) {
 			return nil, fmt.Errorf("ssh %s: %w", addr, ErrAuth)
 		}
 		return nil, fmt.Errorf("ssh handshake %s: %w", addr, err)
@@ -150,3 +150,13 @@ func (s *SSHSession) Exec(ctx context.Context, cmd string) (string, int, error) 
 func (s *SSHSession) Client() *ssh.Client { return s.client }
 func (s *SSHSession) Protocol() string    { return "ssh" }
 func (s *SSHSession) Close() error        { return s.client.Close() }
+
+// isSSHAuthError reports credential rejection. OpenSSH without keyboard-interactive
+// answers our keyboard-interactive attempt with USERAUTH_FAILURE (type 51), which
+// x/crypto surfaces as "unexpected message type 51 (expected 60)" instead of the
+// usual "unable to authenticate".
+func isSSHAuthError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "unable to authenticate") ||
+		strings.Contains(msg, "unexpected message type 51")
+}

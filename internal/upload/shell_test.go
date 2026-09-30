@@ -191,7 +191,7 @@ func (e *errSession) Exec(ctx context.Context, cmd string) (string, int, error) 
 }
 
 func TestBase64CleansUpOnTransportError(t *testing.T) {
-	for _, failOn := range []string{": > ", "printf '%s'", "base64 -d"} {
+	for _, failOn := range []string{"true > ", "printf '%s'", "base64 -d"} {
 		s := &errSession{FakeSession: testutil.FakeSession{Handler: func(string) (string, int) { return "", 0 }}, failOn: failOn}
 		err := NewShellBase64(s, time.Second).Upload(context.Background(), []byte("hello"), "/x")
 		if err == nil || !strings.Contains(err.Error(), "link down") {
@@ -199,6 +199,25 @@ func TestBase64CleansUpOnTransportError(t *testing.T) {
 		}
 		if last := s.Cmds[len(s.Cmds)-1]; last != "rm -f '/x.b64'" {
 			t.Fatalf("%s: last cmd %q", failOn, last)
+		}
+	}
+}
+
+// A failed redirection on a POSIX special builtin such as ":" makes busybox ash
+// exit, killing a telnet session. Truncation must use a regular command.
+func TestTruncateAvoidsSpecialBuiltin(t *testing.T) {
+	for _, u := range []func(*testutil.FakeSession) Uploader{
+		func(s *testutil.FakeSession) Uploader { return NewShellBase64(s, time.Second) },
+		func(s *testutil.FakeSession) Uploader { return NewShellPrintf(s, time.Second) },
+	} {
+		s := &testutil.FakeSession{Handler: func(string) (string, int) { return "", 0 }}
+		if err := u(s).Upload(context.Background(), nil, "/x"); err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range s.Cmds {
+			if strings.HasPrefix(c, ":") {
+				t.Fatalf("special builtin used: %q", c)
+			}
 		}
 	}
 }

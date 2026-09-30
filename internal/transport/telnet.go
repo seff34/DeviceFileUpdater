@@ -22,7 +22,8 @@ const (
 	optSGA  = 3
 )
 
-// iacReader strips telnet negotiation from the stream and answers it.
+// iacReader strips telnet negotiation and ANSI escape sequences (e.g. busybox
+// ash's ESC[6n after the prompt) from the stream and answers negotiation.
 type iacReader struct {
 	c     net.Conn
 	state int
@@ -39,6 +40,8 @@ func (r *iacReader) Read(p []byte) (int, error) {
 			case 0:
 				if b == tIAC {
 					r.state = 1
+				} else if b == 0x1b {
+					r.state = 5
 				} else {
 					p[out] = b
 					out++
@@ -68,6 +71,16 @@ func (r *iacReader) Read(p []byte) (int, error) {
 					r.state = 0
 				} else {
 					r.state = 3
+				}
+			case 5: // after ESC: CSI starts a sequence, anything else is a 2-byte escape
+				if b == '[' {
+					r.state = 6
+				} else {
+					r.state = 0
+				}
+			case 6: // CSI parameters run until a final byte 0x40-0x7e
+				if b >= 0x40 && b <= 0x7e {
+					r.state = 0
 				}
 			}
 		}

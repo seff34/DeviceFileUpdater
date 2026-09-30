@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,6 +174,65 @@ func TestZeroTimeoutStillWorks(t *testing.T) {
 	d.CmdTimeout = 0
 	dst := filepath.Join(t.TempDir(), "x")
 	if r := d.SyncFile(context.Background(), lf(dst, "v", ""), Options{}); r.Status != model.Created {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestDirectoryTargetFails(t *testing.T) {
+	d := newDev(true)
+	dst := filepath.Join(t.TempDir(), "dir")
+	os.Mkdir(dst, 0o755)
+	for _, dry := range []bool{false, true} {
+		r := d.SyncFile(context.Background(), lf(dst, "x", ""), Options{DryRun: dry})
+		if r.Status != model.Failed || r.Error == "" {
+			t.Fatalf("dry=%v %+v", dry, r)
+		}
+	}
+	if es, _ := os.ReadDir(dst); len(es) != 0 {
+		t.Fatalf("directory modified: %v", es)
+	}
+}
+
+func TestSymlinkTargetFails(t *testing.T) {
+	d := newDev(true)
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real")
+	link := filepath.Join(dir, "link")
+	os.WriteFile(real, []byte("orig"), 0o644)
+	os.Symlink(real, link)
+	for _, dry := range []bool{false, true} {
+		r := d.SyncFile(context.Background(), lf(link, "new", ""), Options{DryRun: dry})
+		if r.Status != model.Failed || !strings.Contains(r.Error, "symlink") {
+			t.Fatalf("dry=%v %+v", dry, r)
+		}
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("link replaced")
+	}
+	if got, _ := os.ReadFile(real); string(got) != "orig" {
+		t.Fatal("real file modified")
+	}
+}
+
+func TestNotesJoined(t *testing.T) {
+	// No hasher, and the mode probe fails: both notes are kept.
+	d := newDev(false)
+	base := d.S
+	d.S = &testutil.FakeSession{Handler: func(cmd string) (string, int) {
+		switch {
+		case strings.HasPrefix(cmd, "stat -c"):
+			return "garbage", 0
+		case strings.HasPrefix(cmd, "if [ -L"):
+			return "F", 0
+		}
+		out, code, _ := base.Exec(context.Background(), cmd)
+		return out, code
+	}}
+	d.Chain = upload.NewChain([]upload.Uploader{upload.NewShellPrintf(d.S, 5*time.Second)})
+	dst := filepath.Join(t.TempDir(), "x")
+	os.WriteFile(dst, []byte("old"), 0o644)
+	r := d.SyncFile(context.Background(), lf(dst, "new", ""), Options{})
+	if r.Note != NoteNotCompared+"; "+NoteModeUnknown {
 		t.Fatalf("%+v", r)
 	}
 }

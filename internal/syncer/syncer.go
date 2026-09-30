@@ -40,10 +40,17 @@ func (d *Device) SyncFile(ctx context.Context, f model.LocalFile, opt Options) (
 		return res
 	}
 
-	existed, err := exists(ctx, d.S, d.CmdTimeout, f.Remote)
+	kind, err := probeType(ctx, d.S, d.CmdTimeout, f.Remote)
 	if err != nil {
 		return fail("check exists", err)
 	}
+	switch kind {
+	case kindSymlink:
+		return fail("check target", fmt.Errorf("target is a symlink; list the real path in the manifest"))
+	case kindDir, kindOther:
+		return fail("check target", fmt.Errorf("target exists and is not a regular file"))
+	}
+	existed := kind == kindFile
 	if existed {
 		if d.Hasher == nil {
 			res.Note = NoteNotCompared
@@ -73,7 +80,10 @@ func (d *Device) SyncFile(ctx context.Context, f model.LocalFile, opt Options) (
 			if m, ok := readMode(ctx, d.S, d.CmdTimeout, f.Remote); ok {
 				mode = m
 			} else {
-				res.Note = NoteModeUnknown
+				if res.Note != "" {
+					res.Note += "; "
+				}
+				res.Note += NoteModeUnknown
 			}
 		}
 	}

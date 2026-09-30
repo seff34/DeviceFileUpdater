@@ -56,3 +56,20 @@ func TestReadbackOd(t *testing.T) {
 		t.Fatalf("got %q err %v", got, err)
 	}
 }
+
+func TestSumHasherDashFormatAndInvalid(t *testing.T) {
+	var cmd string
+	out := "5d41402abc4b2a76b9719d911017c592  -"
+	s := &testutil.FakeSession{Handler: func(c string) (string, int) { cmd = c; return out, 0 }}
+	h := SelectHasher(s, probe.Caps{Tools: map[string]bool{"md5sum": true}}, time.Second)
+	got, err := h.Remote(context.Background(), "/x")
+	if err != nil || got != h.Local([]byte("hello")) || cmd != "md5sum < '/x'" {
+		t.Fatalf("got %q err %v cmd %q", got, err, cmd)
+	}
+	for _, bad := range []string{"md5sum: /x: No such file", "zzzz41402abc4b2a76b9719d911017c59  -", "5d41  -"} {
+		out = bad
+		if _, err := h.Remote(context.Background(), "/x"); err == nil {
+			t.Errorf("%q must fail", bad)
+		}
+	}
+}

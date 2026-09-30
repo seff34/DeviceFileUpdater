@@ -67,7 +67,7 @@ type sumHasher struct {
 func (h *sumHasher) Name() string { return h.tool }
 
 func (h *sumHasher) Remote(ctx context.Context, p string) (string, error) {
-	out, err := exec(ctx, h.s, h.timeout, h.tool+" "+shell.Quote(p))
+	out, err := exec(ctx, h.s, h.timeout, h.tool+" < "+shell.Quote(p))
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", h.tool, err)
 	}
@@ -75,7 +75,15 @@ func (h *sumHasher) Remote(ctx context.Context, p string) (string, error) {
 	if len(f) == 0 {
 		return "", fmt.Errorf("%s: empty output", h.tool)
 	}
-	return strings.ToLower(f[0]), nil
+	want := 64
+	if h.tool == "md5sum" {
+		want = 32
+	}
+	sum := strings.ToLower(f[0])
+	if len(sum) != want || strings.Trim(sum, "0123456789abcdef") != "" {
+		return "", fmt.Errorf("%s: invalid digest %q", h.tool, f[0])
+	}
+	return sum, nil
 }
 
 func (h *sumHasher) Local(data []byte) string {

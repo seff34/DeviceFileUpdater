@@ -1,0 +1,12 @@
+services:
+  dev-a: { build: ./devices/ssh-full }
+  dev-b: { build: ./devices/ssh-dropbear }
+  dev-c: { build: ./devices/telnet-ftp }
+  dev-d: { build: ./devices/telnet-min }
+  tester:
+    image: golang:1.26-alpine
+    working_dir: /src
+    volumes: ["../..:/src"]
+    environment: { CGO_ENABLED: "0" }
+    command: go test -tags integration -count=1 -v ./test/integration/...
+    depends_on: [dev-a, dev-b, dev-c, dev-d]

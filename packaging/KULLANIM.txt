@@ -1,0 +1,139 @@
+DeviceFileUpdater - Operatör kılavuzu
+=====================================
+
+DeviceFileUpdater, seçtiğiniz dosyaları gömülü Linux cihazlarına SSH veya
+Telnet ile gönderir. Her cihaz için protokolü ve yükleme yöntemini kendisi
+seçer. Aynı olan dosyaya dokunmaz, farklı olanı günceller, eksik olanı
+oluşturur ve her çalıştırmanın sonunda bir rapor yazar.
+
+İnternet gerekmez. Bilgisayarın cihaz ağına bağlı olması yeterlidir.
+
+
+1. Paketin içindekiler
+----------------------
+
+  devupdater (Windows'ta devupdater.exe)
+      Programın kendisi. Kurulum gerekmez.
+
+  KULLANIM.txt
+      Bu dosya.
+
+  ornek-calisma-alani/
+      Dosya biçimlerini gösteren örnek çalışma alanı:
+        devices.csv    cihaz listesi (ip, username, password)
+        manifest.csv   gönderilecek dosyalar ve cihazdaki hedef yolları
+        files/         gönderilecek dosyaların kendisi
+
+
+2. Programı başlatma
+--------------------
+
+  Windows
+    devupdater.exe dosyasına çift tıklayın.
+    "Windows kişisel bilgisayarınızı korudu" uyarısı çıkarsa
+    "Ek bilgi" ve ardından "Yine de çalıştır" deyin.
+
+  macOS
+    devupdater dosyasına çift tıklayın; bir Terminal penceresi açılır.
+    "Geliştirici doğrulanamadı" uyarısı çıkarsa dosyaya sağ tıklayıp
+    "Aç" deyin. Bu da işe yaramazsa Sistem Ayarları > Gizlilik ve
+    Güvenlik bölümünde "Yine de Aç" düğmesini kullanın.
+
+  Linux
+    Bir terminal açıp paket klasöründe şunu çalıştırın:
+      chmod +x devupdater
+      ./devupdater
+
+Program başladığında varsayılan tarayıcı kendiliğinden açılır. Açılmazsa
+terminalde yazan adresi (http://127.0.0.1:... ile başlar, sonunda token
+vardır) tarayıcıya yapıştırın.
+
+ÖNEMLİ: Açılan terminal penceresi programın kendisidir. İş bitene kadar
+kapatmayın. Programı kapatmak için bu pencereyi kapatın veya içinde
+Ctrl+C'ye basın. Yalnız tarayıcı sekmesini kapatmak programı durdurmaz.
+
+
+3. Adım adım kullanım
+---------------------
+
+Arayüzün sağ üstündeki "Kullanım kılavuzu" bağlantısı her adımı ayrıntılı
+anlatır. Kısaca:
+
+  1. Çalışma alanı  Bir klasör seçin veya yeni klasör oluşturun. Cihaz
+                    listesi, dosyalar ve raporlar bu klasörde tutulur.
+  2. Cihazlar       Cihazları ekleyin (Excel'den yapıştırabilirsiniz) ve
+                    "Tümünü test et" ile bağlantıyı deneyin.
+  3. Dosyalar       Gönderilecek dosyaları seçin, her birinin cihazdaki
+                    hedef yolunu ve iznini (örn. 0644) yazın.
+  4. Ayarlar        Paralel cihaz sayısı, yedek alma ve isteğe bağlı
+                    post-command.
+  5. Önizleme       Zorunlu deneme çalıştırması. Cihaza hiçbir şey
+                    yazılmaz; neyin değişeceğini görüp onaylarsınız.
+  6. Uygula         Dosyalar gönderilir, her cihaz canlı izlenir.
+  7. Rapor          Sonuçlar. Başarısız cihazlar tek tuşla tekrar
+                    denenebilir; rapor HTML olarak açılıp indirilebilir.
+
+
+4. Örnek çalışma alanını kullanma
+---------------------------------
+
+  1. ornek-calisma-alani klasörünü istediğiniz yere kopyalayın ve adını
+     değiştirin (örn. hat-3-guncelleme).
+  2. devices.csv içindeki IP, kullanıcı adı ve şifreleri kendi
+     cihazlarınızla değiştirin. SIFREYI_YAZIN yazan yerlere gerçek
+     şifreyi yazın.
+  3. Programda "Çalışma alanı" adımında bu klasörü seçip
+     "Bu klasörü kullan" deyin. Eksik dosyalar (settings.json,
+     reports/) kendiliğinden eklenir.
+
+Cihazları ve dosyaları doğrudan arayüzden de ekleyebilirsiniz; CSV
+dosyalarını elle düzenlemek zorunlu değildir.
+
+
+5. Dosya biçimleri
+------------------
+
+  devices.csv
+    ip,username,password
+    192.168.1.101,root,sifre
+    192.168.1.103:2222,admin,sifre     (standart dışı port)
+
+  manifest.csv
+    local_path,remote_path,mode
+    files/uygulama.conf,/etc/uygulama/uygulama.conf,0644
+
+  - Excel ile düzenleyebilirsiniz. Türkçe Excel'in ";" ile ayırdığı
+    dosyalar da kabul edilir.
+  - remote_path cihazdaki tam yoldur ve "/" ile başlar.
+  - mode boş bırakılırsa var olan dosyanın izni korunur.
+
+
+6. Raporlar
+-----------
+
+Her önizleme ve uygulama, çalışma alanındaki reports/ klasörüne bir rapor
+yazar. Eski raporlara arayüzdeki "Geçmiş raporlar" bağlantısından
+ulaşabilirsiniz. Şifreler raporlara hiçbir zaman yazılmaz.
+
+
+7. Güvenlik notları
+-------------------
+
+  - devices.csv şifreleri düz metin olarak tutar. Çalışma alanı
+    klasörünü yalnız yetkili kişilerle paylaşın.
+  - Arayüz yalnız bu bilgisayardan açılabilir (127.0.0.1) ve her
+    başlatmada yeni bir güvenlik anahtarı üretir.
+  - "Oturum bulunamadı" ekranı görürseniz programı yeniden başlatın.
+
+
+8. Otomasyon (isteğe bağlı)
+---------------------------
+
+Aynı işlem arayüz olmadan komut satırından da yapılabilir:
+
+  devupdater run -workspace KLASOR -dry-run      önizleme
+  devupdater run -workspace KLASOR               uygulama
+  devupdater run -workspace KLASOR -only-failed RAPOR_ID
+
+Çıkış kodu: 0 tüm cihazlar başarılı, 1 bazı cihazlar başarısız,
+2 kullanım veya yapılandırma hatası.

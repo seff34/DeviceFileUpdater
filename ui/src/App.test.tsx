@@ -90,6 +90,16 @@ describe('App', () => {
     expect(window.location.pathname).toBe('/settings')
     expect(screen.getByRole('heading', { name: 'Ayarlar' })).toBeInTheDocument()
   })
+  it('opens the usage guide from the top bar and keeps it without redirecting', async () => {
+    mockApi({ ...populated, '/api/runs/current': run({}) })
+    const qc = renderApp()
+    await settled(qc)
+    screen.getByRole('link', { name: 'Kullanım kılavuzu' }).click()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Kullanım kılavuzu' })).toBeInTheDocument()
+    await settled(qc)
+    expect(window.location.pathname).toBe('/help')
+    expect(screen.getAllByRole('link', { name: /Bu adıma git/ })).toHaveLength(7)
+  })
   it('shows the session screen on 401', async () => {
     mockApi({ '/api/workspace': new Response(JSON.stringify({ error: 'Oturum bulunamadı.' }), { status: 401 }) })
     renderApp()

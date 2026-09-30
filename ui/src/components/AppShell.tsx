@@ -1,8 +1,10 @@
-import { ClockCounterClockwise, FolderSimple } from '@phosphor-icons/react'
+import { ClockCounterClockwise, FolderSimple, Question } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { api } from '@/lib/api'
 import { Link } from '@/lib/router'
+
+const NAV = 'flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 export function AppShell({ children, stepper }: { children: ReactNode; stepper?: ReactNode }) {
   const ws = useQuery({ queryKey: ['workspace'], queryFn: api.workspace })
@@ -19,12 +21,15 @@ export function AppShell({ children, stepper }: { children: ReactNode; stepper?:
               <span className="truncate font-mono">{ws.data.current}</span>
             </span>
           )}
-          <Link
-            to="/history"
-            className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ClockCounterClockwise size={16} aria-hidden /> Geçmiş raporlar
-          </Link>
+          <nav className="ml-auto flex shrink-0 items-center gap-1">
+            {/* Labels hide below sm so the bar fits a phone; the icon keeps the name via sr-only text. */}
+            <Link to="/history" className={NAV}>
+              <ClockCounterClockwise size={16} aria-hidden /> <span className="sr-only sm:not-sr-only">Geçmiş raporlar</span>
+            </Link>
+            <Link to="/help" className={NAV}>
+              <Question size={16} aria-hidden /> <span className="sr-only sm:not-sr-only">Kullanım kılavuzu</span>
+            </Link>
+          </nav>
         </div>
       </header>
       {stepper}

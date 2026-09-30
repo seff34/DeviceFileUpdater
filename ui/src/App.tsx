@@ -5,6 +5,7 @@ import { Stepper } from '@/components/Stepper'
 import { navigate, reportIdFromPath, usePath } from '@/lib/router'
 import { useSessionLost } from '@/lib/session'
 import { STEPS, blocker, canEnter, stepByPath, type StepId } from '@/lib/steps'
+import { Help } from '@/pages/Help'
 import { History, ReportPage } from '@/pages/History'
 import { ApplyStep } from '@/steps/ApplyStep'
 import { DevicesStep } from '@/steps/DevicesStep'
@@ -45,7 +46,7 @@ export default function App() {
 
   useEffect(() => {
     if (loading || lost) return
-    if (path === '/' || (!step && !reportId && path !== '/history')) {
+    if (path === '/' || (!step && !reportId && path !== '/history' && path !== '/help')) {
       navigate(landing(facts), { replace: true })
     } else if (step && !canEnter(step.id, facts)) {
       navigate(landing(facts), { replace: true })
@@ -55,6 +56,7 @@ export default function App() {
   if (lost) return <SessionLost />
   if (reportId) return <AppShell><ReportPage id={reportId} /></AppShell>
   if (path === '/history') return <AppShell><History /></AppShell>
+  if (path === '/help') return <AppShell><Help /></AppShell>
   if (!step) return <AppShell>{null}</AppShell>
   const View = VIEWS[step.id]
   return (

@@ -228,7 +228,7 @@ func runDevice(ctx context.Context, job Job, d workspace.Device, send func(Event
 	}
 	dr.Tools = caps.List()
 	chain := upload.NewChain(upload.Select(s, caps,
-		upload.FTPCreds{Host: d.HostOnly(), User: d.Username, Pass: d.Password}, cmdTimeout))
+		upload.FTPCreds{Host: d.HostOnly(), User: d.Username, Pass: d.Password}, cmdTimeout), cmdTimeout)
 	h := syncer.SelectHasher(s, caps, cmdTimeout)
 	dr.HashMethod = "none"
 	if h != nil {

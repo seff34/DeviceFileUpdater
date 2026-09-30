@@ -26,7 +26,7 @@ func newDev(withHash bool) *Device {
 	}
 	return &Device{
 		S: s, Hasher: h, CmdTimeout: 5 * time.Second,
-		Chain: upload.NewChain([]upload.Uploader{upload.NewShellPrintf(s, 5*time.Second)}),
+		Chain: upload.NewChain([]upload.Uploader{upload.NewShellPrintf(s, 5*time.Second)}, 5*time.Second),
 	}
 }
 
@@ -228,7 +228,7 @@ func TestNotesJoined(t *testing.T) {
 		out, code, _ := base.Exec(context.Background(), cmd)
 		return out, code
 	}}
-	d.Chain = upload.NewChain([]upload.Uploader{upload.NewShellPrintf(d.S, 5*time.Second)})
+	d.Chain = upload.NewChain([]upload.Uploader{upload.NewShellPrintf(d.S, 5*time.Second)}, 5*time.Second)
 	dst := filepath.Join(t.TempDir(), "x")
 	os.WriteFile(dst, []byte("old"), 0o644)
 	r := d.SyncFile(context.Background(), lf(dst, "new", ""), Options{})
@@ -249,7 +249,7 @@ func (stallUp) Upload(ctx context.Context, _ []byte, _ string) error {
 func TestStalledUploadTimesOut(t *testing.T) {
 	d := newDev(true)
 	d.CmdTimeout = 200 * time.Millisecond
-	d.Chain = upload.NewChain([]upload.Uploader{stallUp{}})
+	d.Chain = upload.NewChain([]upload.Uploader{stallUp{}}, d.CmdTimeout)
 	dst := filepath.Join(t.TempDir(), "f")
 	done := make(chan model.FileResult, 1)
 	go func() { done <- d.SyncFile(context.Background(), lf(dst, "x", ""), Options{}) }()
@@ -263,14 +263,34 @@ func TestStalledUploadTimesOut(t *testing.T) {
 	}
 }
 
-func TestUploadTimeoutScalesWithSize(t *testing.T) {
-	if got := uploadTimeout(time.Second, 0); got != time.Second {
-		t.Fatalf("empty: %v", got)
+// slowShell is a device with a steady ~20ms round trip per command.
+type slowShell struct{ testutil.LocalShell }
+
+func (s slowShell) Exec(ctx context.Context, cmd string) (string, int, error) {
+	time.Sleep(20 * time.Millisecond)
+	return s.LocalShell.Exec(ctx, cmd)
+}
+
+// Shell uploaders are bounded per chunk only: a slow but steady device must
+// finish even when the whole upload takes longer than cmdTimeout + size/minRate.
+func TestSlowShellUploadNotCutOff(t *testing.T) {
+	s := slowShell{}
+	d := &Device{S: s, CmdTimeout: 200 * time.Millisecond,
+		Chain: upload.NewChain([]upload.Uploader{upload.NewShellPrintf(s, 200*time.Millisecond)}, 200*time.Millisecond)}
+	data := make([]byte, 8<<10)
+	for i := range data {
+		data[i] = byte(i * 7)
 	}
-	if got := uploadTimeout(time.Second, 64<<10); got != 3*time.Second {
-		t.Fatalf("64 KiB: %v", got)
+	dst := filepath.Join(t.TempDir(), "bin")
+	start := time.Now()
+	r := d.SyncFile(context.Background(), lf(dst, string(data), ""), Options{})
+	if r.Status != model.Created {
+		t.Fatalf("%+v", r)
 	}
-	if got := uploadTimeout(0, 0); got != defaultCmdTimeout {
-		t.Fatalf("zero cmd timeout: %v", got)
+	if el := time.Since(start); el < 200*time.Millisecond+time.Duration(len(data))*time.Second/(32<<10) {
+		t.Fatalf("test not meaningful: upload took only %v", el)
+	}
+	if got, _ := os.ReadFile(dst); string(got) != string(data) {
+		t.Fatal("content mismatch")
 	}
 }

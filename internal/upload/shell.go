@@ -15,8 +15,8 @@ import (
 const (
 	// maxPayload caps the data carried by one command.
 	maxPayload = 700
-	// maxCmdLen is the device limit for one command line; marginLen reserves room for
-	// the marker suffix added by the transport.
+	// maxCmdLen is the device limit for one command line; marginLen is headroom
+	// for shell/transport overhead (the marker echo is sent on its own line).
 	maxCmdLen = 1024
 	marginLen = 64
 	minBudget = 64
@@ -42,7 +42,8 @@ func NewShellBase64(s transport.Session, cmdTimeout time.Duration) Uploader {
 	return &shellBase64{s: s, timeout: cmdTimeout}
 }
 
-func (u *shellBase64) Name() string { return "shell-base64" }
+func (u *shellBase64) Name() string       { return "shell-base64" }
+func (u *shellBase64) perCommandTimeout() {}
 
 func (u *shellBase64) Upload(ctx context.Context, data []byte, remote string) error {
 	b64 := shell.Quote(remote + ".b64")
@@ -90,7 +91,8 @@ func NewShellPrintf(s transport.Session, cmdTimeout time.Duration) Uploader {
 	return &shellPrintf{s: s, timeout: cmdTimeout}
 }
 
-func (u *shellPrintf) Name() string { return "shell-printf" }
+func (u *shellPrintf) Name() string       { return "shell-printf" }
+func (u *shellPrintf) perCommandTimeout() {}
 
 // printfEscape turns bytes into a printf format string that reproduces them exactly.
 func printfEscape(b byte) string {

@@ -124,6 +124,9 @@ func TestParallelLimitAndPanicIsolation(t *testing.T) {
 	if res.Devices[1].Error == "" {
 		t.Fatal("panic not captured")
 	}
+	if fs := res.Devices[1].Files; len(fs) != len(job.Files) || fs[0].Status != model.Failed {
+		t.Fatalf("panicked device files: %+v", fs)
+	}
 	if res.Devices[4].Files[0].Status != model.WouldCreate {
 		t.Fatalf("other devices affected: %+v", res.Devices[4])
 	}
@@ -137,20 +140,72 @@ func TestCancelledRunReportsCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var calls int32
 	job.Dial = func(c context.Context, d workspace.Device, _ transport.Options) (transport.Session, error) {
-		if atomic.AddInt32(&calls, 1) == 1 {
-			cancel()
-		}
+		atomic.AddInt32(&calls, 1)
+		cancel()
 		return nil, c.Err()
 	}
-	job.Devices = []workspace.Device{{Host: "1"}, {Host: "2"}, {Host: "3"}}
+	job.Devices = []workspace.Device{{Host: "1"}, {Host: "2"}, {Host: "3"}, {Host: "4"}}
 	res := Run(ctx, job, nil)
 	for i, d := range res.Devices {
 		if d.Error == "" || len(d.Files) != 1 || d.Files[0].Status != model.Failed || d.Files[0].Error != "cancelled" {
 			t.Fatalf("device %d not reported cancelled: %+v", i, d)
 		}
 	}
+	// Parallel=1: only the first device can be dialed; the ctx re-check after
+	// acquiring the slot stops the rest deterministically.
 	if n := atomic.LoadInt32(&calls); n != 1 {
-		t.Fatalf("queued devices must not dial after cancel, dials=%d", n)
+		t.Fatalf("dials=%d, want 1", n)
+	}
+}
+
+// leakySession fails every non-echo command with an error containing the password.
+type leakySession struct {
+	testutil.LocalShell
+	pw string
+}
+
+func (l leakySession) Exec(ctx context.Context, cmd string) (string, int, error) {
+	if strings.HasPrefix(cmd, "echo") {
+		return l.LocalShell.Exec(ctx, cmd)
+	}
+	return "", -1, errors.New("ftp login failed for " + l.pw)
+}
+
+func TestRedaction(t *testing.T) {
+	dir := t.TempDir()
+	pw := "s3cret"
+	job := baseJob(dir)
+	job.Dial = func(context.Context, workspace.Device, transport.Options) (transport.Session, error) {
+		return leakySession{pw: pw}, nil
+	}
+	job.Devices = []workspace.Device{{Host: "up", Password: pw}}
+	job.Settings.PostCommand = "echo " + pw
+	job.Settings.PostCommandPolicy = "always"
+	var evFile string
+	res := Run(context.Background(), job, func(e Event) {
+		if e.Type == "file_result" {
+			evFile = e.File.Error
+		}
+	})
+	fr := res.Devices[0].Files[0]
+	if fr.Status != model.Failed || !strings.Contains(fr.Error, "***") {
+		t.Fatalf("test premise: error should carry marker: %+v", fr)
+	}
+	if strings.Contains(fr.Error, pw) || strings.Contains(evFile, pw) || !strings.Contains(evFile, "***") {
+		t.Fatalf("file error leaks: %q / %q", fr.Error, evFile)
+	}
+	p := res.Devices[0].Post
+	if p == nil || strings.Contains(p.Command, pw) || p.Output != pw {
+		t.Fatalf("post: %+v", p) // command redacted, output untouched
+	}
+}
+
+func TestShortPasswordLeavesTextIntact(t *testing.T) {
+	if got := redact("dial 192.168.1.1", "1"); got != "dial 192.168.1.1" {
+		t.Fatalf("got %q", got)
+	}
+	if got := redact("pw abcd!", "abcd"); got != "pw ***!" {
+		t.Fatalf("got %q", got)
 	}
 }
 

@@ -31,9 +31,12 @@ func secs(n int, def time.Duration) time.Duration {
 	return time.Duration(n) * time.Second
 }
 
-// redact removes the device password from text destined for results/events.
+// redact removes the device password from error text destined for
+// results/events. Passwords shorter than 4 bytes are not redacted: they would
+// corrupt unrelated text (e.g. "1" inside an IP address). Post.Output is
+// deliberately left untouched: it is remote stdout of the operator's own command.
 func redact(msg, pass string) string {
-	if pass == "" {
+	if len(pass) < 4 {
 		return msg
 	}
 	return strings.ReplaceAll(msg, pass, "***")
@@ -112,11 +115,12 @@ func Run(ctx context.Context, job Job, emit func(Event)) model.RunResult {
 			select {
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
+				if ctx.Err() != nil { // select picks randomly when both are ready
+					res.Devices[i] = cancelledDevice(job, d, send)
+					return
+				}
 			case <-ctx.Done():
-				dr := model.DeviceResult{Host: d.Host, Error: "cancelled"}
-				failAll(&dr, job.Files, 0, "cancelled")
-				send(Event{Type: "device_state", Host: d.Host, Stage: "failed", Total: len(job.Files), Error: dr.Error})
-				res.Devices[i] = dr
+				res.Devices[i] = cancelledDevice(job, d, send)
 				return
 			}
 			res.Devices[i] = runDevice(ctx, job, d, send)
@@ -126,6 +130,13 @@ func Run(ctx context.Context, job Job, emit func(Event)) model.RunResult {
 	res.Finished = time.Now()
 	send(Event{Type: "run_done", Run: &res})
 	return res
+}
+
+func cancelledDevice(job Job, d workspace.Device, send func(Event)) model.DeviceResult {
+	dr := model.DeviceResult{Host: d.Host, Error: "cancelled"}
+	failAll(&dr, job.Files, 0, "cancelled")
+	send(Event{Type: "device_state", Host: d.Host, Stage: "failed", Total: len(job.Files), Error: dr.Error})
+	return dr
 }
 
 func failAll(dr *model.DeviceResult, files []model.LocalFile, from int, msg string) {
@@ -210,6 +221,7 @@ func runDevice(ctx context.Context, job Job, d workspace.Device, send func(Event
 		}
 		state("syncing", i)
 		fr := dev.SyncFile(ctx, f, syncer.Options{DryRun: job.DryRun, Backup: st.Backup})
+		fr.Error = redact(fr.Error, d.Password)
 		dr.Files = append(dr.Files, fr)
 		changed = changed || fr.Status == model.Created || fr.Status == model.Updated
 		send(Event{Type: "file_result", Host: d.Host, Done: i + 1, Total: total, File: &fr})
@@ -223,8 +235,8 @@ func runDevice(ctx context.Context, job Job, d workspace.Device, send func(Event
 		c, cancel := context.WithTimeout(ctx, cmdTimeout)
 		out, code, err := s.Exec(c, st.PostCommand)
 		cancel()
-		out = redact(truncate(out, maxPostOutput), d.Password)
-		dr.Post = &model.PostResult{Command: st.PostCommand, ExitCode: code, Output: out}
+		out = truncate(out, maxPostOutput)
+		dr.Post = &model.PostResult{Command: redact(st.PostCommand, d.Password), ExitCode: code, Output: out}
 		if err != nil {
 			dr.Post.Error = redact(err.Error(), d.Password)
 		}

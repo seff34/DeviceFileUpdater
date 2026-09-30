@@ -77,6 +77,7 @@ func (s *Server) Token() string         { return s.token }
 // routes is the single registration point; later tasks add their handlers here.
 func (s *Server) routes() {
 	s.registerWorkspace()
+	s.registerData()
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Bilinmeyen API adresi: "+r.URL.Path)
 	})

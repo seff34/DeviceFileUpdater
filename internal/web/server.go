@@ -33,6 +33,7 @@ type Server struct {
 	mux     *http.ServeMux
 	handler http.Handler
 	recent  *recentStore
+	runs    *runManager
 	ln      net.Listener
 
 	mu sync.Mutex
@@ -61,6 +62,7 @@ func New(opt Options) (*Server, error) {
 		}
 		s.token = hex.EncodeToString(b)
 	}
+	s.runs = newRunManager()
 	s.routes()
 	s.handler = s.guard(s.mux)
 	if opt.Workspace != "" {
@@ -79,6 +81,7 @@ func (s *Server) routes() {
 	s.registerWorkspace()
 	s.registerData()
 	s.registerCheck()
+	s.registerRuns()
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Bilinmeyen API adresi: "+r.URL.Path)
 	})
@@ -96,6 +99,7 @@ func (s *Server) setWorkspace(dir string) {
 	s.ws = dir
 	s.mu.Unlock()
 	s.recent.add(dir)
+	s.runs.reset()
 }
 
 // Listen binds the address and returns the launch URL carrying the token.
@@ -128,5 +132,5 @@ func (s *Server) Serve(ctx context.Context) error {
 	}
 }
 
-// shutdownHooks is extended in Task 6 to cancel an active run.
-func (s *Server) shutdownHooks() {}
+// shutdownHooks cancels an active run and waits for its report to be written.
+func (s *Server) shutdownHooks() { s.runs.shutdown(30 * time.Second) }

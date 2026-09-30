@@ -179,5 +179,5 @@ func (s *Server) getFS(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"path": p, "parent": parent, "entries": out, "roots": fsRoots()})
 }
 
-// runActive reports whether a run is in progress (wired to the run manager in Task 6).
-func (s *Server) runActive() bool { return false }
+// runActive reports whether a run is in progress.
+func (s *Server) runActive() bool { return s.runs.active() }

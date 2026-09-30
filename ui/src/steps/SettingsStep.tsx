@@ -1,4 +1,4 @@
-import { CaretRight } from '@phosphor-icons/react'
+import { CaretRight, WarningCircle } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { SaveIndicator } from '@/components/SaveIndicator'
@@ -38,6 +38,12 @@ function Field({ id, label, help, error, children }: { id: string; label: string
   )
 }
 
+const POLICY_HELP: Record<Settings['post_command_policy'], string> = {
+  on_change: 'Sadece dosya değiştiyse: hiçbir dosya güncellenmediyse komut çalışmaz.',
+  always: 'Her zaman: dosyalar aynı olsa da çalışır.',
+  never: 'Hiçbir zaman: komut çalıştırılmaz.',
+}
+
 const toInt = (v: string) => (v.trim() === '' ? Number.NaN : Number(v))
 const shown = (n: number) => (Number.isNaN(n) ? '' : String(n))
 
@@ -60,6 +66,7 @@ export function SettingsStep() {
       : Object.keys(errs).length > 0
         ? 'Ayarlardaki hataları düzeltin.'
         : saveBlocker(state, error)
+  const advErrors = (errs.connect_timeout_sec ? 1 : 0) + (errs.command_timeout_sec ? 1 : 0)
   const described = (id: string, err?: string) => (err ? `${id}-help ${id}-err` : `${id}-help`)
 
   return (
@@ -94,7 +101,12 @@ export function SettingsStep() {
           >
             <Switch id="set-backup" checked={draft.backup} onCheckedChange={(v) => set({ backup: v })} aria-describedby="set-backup-help" />
           </Field>
-          <Field id="set-post" label="post-command" help="Dosyalar işlendikten sonra her cihazda çalışacak komut. Boş bırakılırsa çalışmaz. Çıktısı ve çıkış kodu rapora yazılır.">
+          <Field id="set-post" label="post-command" help={
+              <>
+                Dosyalar işlendikten sonra her cihazda, giriş yapılan kullanıcının yetkileriyle çalışacak komut. Boş bırakılırsa çalışmaz. Çıktısı ve çıkış kodu rapora yazılır.
+                <span className="mt-1 block text-xs">Not: komut her cihazda çalışır, önce tek bir cihazda denemeniz önerilir.</span>
+              </>
+            }>
             <Input
               id="set-post"
               value={draft.post_command}
@@ -107,11 +119,14 @@ export function SettingsStep() {
             <div className="mt-3">
               <Label htmlFor="set-policy" className="mb-1.5 block text-xs text-muted-foreground">Ne zaman çalışsın</Label>
               <Select value={draft.post_command_policy} onValueChange={(v) => set({ post_command_policy: v as Settings['post_command_policy'] })} disabled={!draft.post_command.trim()}>
-                <SelectTrigger id="set-policy" className="w-64"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="set-policy" className="w-64" aria-describedby="set-policy-help"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(POLICY).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <p id="set-policy-help" className="mt-1.5 text-xs text-muted-foreground">
+                {draft.post_command.trim() ? POLICY_HELP[draft.post_command_policy] : 'Önce komut girin.'}
+              </p>
             </div>
           </Field>
 
@@ -119,6 +134,12 @@ export function SettingsStep() {
             <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-md py-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <CaretRight size={14} className={cn('transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none', advanced && 'rotate-90')} aria-hidden />
               Gelişmiş
+              {advErrors > 0 && (
+                <span className="ml-2 flex items-center gap-1 text-xs font-normal text-warn">
+                  <WarningCircle size={14} aria-hidden />
+                  ({advErrors} hata)
+                </span>
+              )}
             </CollapsibleTrigger>
             <CollapsibleContent className="divide-y border-t">
               <Field id="set-connect" label="Bağlantı zaman aşımı (sn)" help="Cihaza bağlanmak için beklenecek en uzun süre." error={errs.connect_timeout_sec}>
@@ -148,9 +169,9 @@ export function SettingsStep() {
               <Field
                 id="set-strict"
                 label="Host key doğrulaması"
-                help={<>Açıkken her cihazın SSH anahtarı ilk bağlantıda çalışma alanındaki <span className="font-mono">known_hosts</span> dosyasına kaydedilir. Anahtar sonradan değişirse bağlantı reddedilir.</>}
+                help={<>Açıkken her cihazın SSH anahtarı ilk bağlantıda çalışma alanındaki <span className="font-mono">known_hosts</span> dosyasına kaydedilir. Anahtar sonradan değişirse bağlantı reddedilir. Kapalıyken cihaz anahtarı doğrulanmaz.</>}
               >
-                <Switch id="set-strict" aria-label="Host key doğrulaması" checked={draft.strict_host_key} onCheckedChange={(v) => set({ strict_host_key: v })} aria-describedby="set-strict-help" />
+                <Switch id="set-strict" checked={draft.strict_host_key} onCheckedChange={(v) => set({ strict_host_key: v })} aria-describedby="set-strict-help" />
               </Field>
             </CollapsibleContent>
           </Collapsible>

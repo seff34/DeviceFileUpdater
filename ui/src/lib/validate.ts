@@ -37,13 +37,15 @@ export function validateManifest(es: ManifestEntry[]): RowErrors[] {
 }
 
 const POLICIES: readonly string[] = ['on_change', 'always', 'never']
+const MAX_INT32 = 2147483647
+const intIn = (v: number, lo: number, hi: number) => Number.isSafeInteger(v) && v >= lo && v <= hi
 
-/** Mirrors workspace.Settings.Validate: parallel 1..200, known policy, timeouts >= 1 (no upper bound). */
+/** Mirrors workspace.Settings.Validate: parallel 1..200, known policy, timeouts >= 1. Integers are capped at int32 so the server never sees an absurd value. */
 export function validateSettings(s: Settings): Partial<Record<keyof Settings, string>> {
   const e: Partial<Record<keyof Settings, string>> = {}
-  if (!Number.isInteger(s.parallel) || s.parallel < 1 || s.parallel > 200) e.parallel = '1 ile 200 arasında bir tam sayı girin.'
+  if (!intIn(s.parallel, 1, 200)) e.parallel = '1 ile 200 arasında bir tam sayı girin.'
   if (!POLICIES.includes(s.post_command_policy)) e.post_command_policy = 'Geçerli bir seçenek seçin.'
-  if (!Number.isInteger(s.connect_timeout_sec) || s.connect_timeout_sec < 1) e.connect_timeout_sec = 'En az 1 saniye olan bir tam sayı girin.'
-  if (!Number.isInteger(s.command_timeout_sec) || s.command_timeout_sec < 1) e.command_timeout_sec = 'En az 1 saniye olan bir tam sayı girin.'
+  if (!intIn(s.connect_timeout_sec, 1, MAX_INT32)) e.connect_timeout_sec = 'En az 1 saniye olan bir tam sayı girin.'
+  if (!intIn(s.command_timeout_sec, 1, MAX_INT32)) e.command_timeout_sec = 'En az 1 saniye olan bir tam sayı girin.'
   return e
 }

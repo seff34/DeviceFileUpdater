@@ -21,11 +21,11 @@ func checkKnownHost(path, host string, key ssh.PublicKey) error {
 	if f, err := os.Open(path); err == nil {
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
-			h, k, ok := strings.Cut(sc.Text(), " ")
+			h, k, ok := strings.Cut(strings.TrimSpace(sc.Text()), " ")
 			if ok && h == host {
 				f.Close()
-				if k != want {
-					return fmt.Errorf("host key for %s changed (remove its line from %s if the device was reflashed)", host, path)
+				if strings.TrimSpace(k) != want {
+					return fmt.Errorf("%w: host key for %s changed (remove its line from %s if the device was reflashed)", ErrHostKey, host, path)
 				}
 				return nil
 			}

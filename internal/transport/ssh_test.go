@@ -3,7 +3,9 @@ package transport
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"devupdater/internal/testutil"
 )
@@ -57,5 +59,52 @@ func TestIsSSHAuthError(t *testing.T) {
 		if got := isSSHAuthError(errors.New(msg)); got != want {
 			t.Errorf("%q: got %v want %v", msg, got, want)
 		}
+	}
+}
+
+// returnsWithin fails the test if fn does not return within d.
+func returnsWithin(t *testing.T, d time.Duration, fn func() error) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- fn() }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(d):
+		t.Fatalf("call did not return within %v", d)
+		return nil
+	}
+}
+
+func TestSSHExecHonoursCtxWhenChannelOpenStalls(t *testing.T) {
+	hold := &atomic.Bool{}
+	addr := testutil.FakeSSH{User: "u", Pass: "p", Handler: handler, HoldChannels: hold}.Start(t)
+	s, err := DialSSH(context.Background(), addr, "u", "p", testOpts())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	hold.Store(true)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err = returnsWithin(t, 2*time.Second, func() error { _, _, err := s.Exec(ctx, "uname"); return err })
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want deadline exceeded", err)
+	}
+}
+
+func TestSSHExecHonoursCtxWhenStartStalls(t *testing.T) {
+	stall := func(kind, arg string) bool { return kind == "exec" && arg == "hang" }
+	addr := testutil.FakeSSH{User: "u", Pass: "p", Handler: handler, Stall: stall}.Start(t)
+	s, err := DialSSH(context.Background(), addr, "u", "p", testOpts())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err = returnsWithin(t, 2*time.Second, func() error { _, _, err := s.Exec(ctx, "hang"); return err })
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want deadline exceeded", err)
 	}
 }

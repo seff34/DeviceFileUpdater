@@ -5,6 +5,7 @@ package runner
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -280,5 +281,17 @@ func TestRunIDsUniqueWithinSameSecondAndSafe(t *testing.T) {
 	b := newRunID(time.Date(2026, 9, 30, 12, 0, 1, 0, time.UTC))
 	if !(a[:15] < b[:15]) || len(a) != len("20060102-150405-abcd") {
 		t.Fatalf("ids %s %s", a, b)
+	}
+}
+
+func TestHostKeyMismatchSurfaced(t *testing.T) {
+	job := baseJob(t.TempDir())
+	job.Devices = []workspace.Device{{Host: "evil"}}
+	job.Dial = func(context.Context, workspace.Device, transport.Options) (transport.Session, error) {
+		return nil, fmt.Errorf("ssh handshake evil:22: %w", transport.ErrHostKey)
+	}
+	d := Run(context.Background(), job, nil).Devices[0]
+	if !strings.Contains(d.Error, "host key mismatch") || d.Files[0].Error != "host key mismatch" {
+		t.Fatalf("%+v", d)
 	}
 }

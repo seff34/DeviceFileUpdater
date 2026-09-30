@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"testing"
 
 	"github.com/pkg/sftp"
@@ -16,6 +17,11 @@ type FakeSSH struct {
 	User, Pass string
 	NoExec     bool // reject "exec" requests, forcing PTY shell fallback
 	Handler    func(cmd string) (string, int)
+	// HoldChannels, while set, leaves new channel-open requests unanswered.
+	HoldChannels *atomic.Bool
+	// Stall reports whether an "exec" (arg = command) or "subsystem" (arg = name)
+	// request is left unanswered, like a wedged device.
+	Stall func(kind, arg string) bool
 }
 
 func (f FakeSSH) Start(t *testing.T) string {
@@ -59,6 +65,9 @@ func (f FakeSSH) serve(c net.Conn, cfg *ssh.ServerConfig) {
 	}
 	go ssh.DiscardRequests(reqs)
 	for nc := range chans {
+		if f.HoldChannels != nil && f.HoldChannels.Load() {
+			continue // never accept or reject
+		}
 		if nc.ChannelType() != "session" {
 			nc.Reject(ssh.UnknownChannelType, "no")
 			continue
@@ -74,6 +83,12 @@ func (f FakeSSH) serve(c net.Conn, cfg *ssh.ServerConfig) {
 func (f FakeSSH) session(ch ssh.Channel, reqs <-chan *ssh.Request) {
 	defer ch.Close()
 	for req := range reqs {
+		if (req.Type == "exec" || req.Type == "subsystem") && f.Stall != nil && len(req.Payload) >= 4 {
+			n := binary.BigEndian.Uint32(req.Payload[:4])
+			if int(n) <= len(req.Payload)-4 && f.Stall(req.Type, string(req.Payload[4:4+n])) {
+				continue // never reply
+			}
+		}
 		switch req.Type {
 		case "pty-req":
 			req.Reply(true, nil)

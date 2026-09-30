@@ -23,3 +23,8 @@ type Options struct {
 
 // ErrAuth marks credential rejection (no point retrying the same credentials).
 var ErrAuth = errors.New("authentication failed")
+
+// ErrHostKey marks an SSH host key that differs from known_hosts. Dial stops
+// on it: falling back to Telnet would send the password in cleartext to a
+// possibly impersonated device.
+var ErrHostKey = errors.New("host key mismatch")

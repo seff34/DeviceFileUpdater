@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -144,5 +145,27 @@ func TestDialContextCancelledDuringRetry(t *testing.T) {
 	}
 	if sshCalls != 1 {
 		t.Fatalf("expected SSH called 1 time, got %d", sshCalls)
+	}
+}
+
+// A host key mismatch must never fall back to Telnet (cleartext password) or retry.
+func TestDialHostKeyMismatchStops(t *testing.T) {
+	var sshCalls, telnetCalls int
+	oldDialSSH, oldDialTelnet := dialSSH, dialTelnet
+	t.Cleanup(func() { dialSSH, dialTelnet = oldDialSSH, oldDialTelnet })
+	dialSSH = func(context.Context, string, string, string, Options) (Session, error) {
+		sshCalls++
+		return nil, fmt.Errorf("ssh handshake x: %w", ErrHostKey)
+	}
+	dialTelnet = func(context.Context, string, string, string, Options) (Session, error) {
+		telnetCalls++
+		return nil, errors.New("telnet must not be tried")
+	}
+	_, err := Dial(context.Background(), workspace.Device{Host: "127.0.0.1:999", Username: "u", Password: "p"}, testOpts())
+	if !errors.Is(err, ErrHostKey) || !strings.Contains(err.Error(), "host key mismatch") {
+		t.Fatalf("err = %v, want ErrHostKey", err)
+	}
+	if sshCalls != 1 || telnetCalls != 0 {
+		t.Fatalf("ssh calls %d (want 1), telnet calls %d (want 0)", sshCalls, telnetCalls)
 	}
 }

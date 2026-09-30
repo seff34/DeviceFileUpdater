@@ -17,6 +17,7 @@ var (
 )
 
 // Dial connects with SSH, falling back to Telnet, retrying once on connection errors.
+// ErrAuth and ErrHostKey are not retried; ErrHostKey also skips the Telnet fallback.
 func Dial(ctx context.Context, d workspace.Device, opt Options) (Session, error) {
 	var err error
 	for attempt := 0; attempt < 2; attempt++ {
@@ -32,7 +33,7 @@ func Dial(ctx context.Context, d workspace.Device, opt Options) (Session, error)
 		if err == nil {
 			return s, nil
 		}
-		if errors.Is(err, ErrAuth) || ctx.Err() != nil {
+		if errors.Is(err, ErrAuth) || errors.Is(err, ErrHostKey) || ctx.Err() != nil {
 			return nil, err
 		}
 	}
@@ -43,6 +44,9 @@ func dialOnce(ctx context.Context, d workspace.Device, opt Options) (Session, er
 	s, sshErr := dialSSH(ctx, d.Addr(22), d.Username, d.Password, opt)
 	if sshErr == nil {
 		return s, nil
+	}
+	if errors.Is(sshErr, ErrHostKey) {
+		return nil, sshErr // never fall back to Telnet: it would send the password in cleartext
 	}
 	s, telErr := dialTelnet(ctx, d.Addr(23), d.Username, d.Password, opt)
 	if telErr == nil {

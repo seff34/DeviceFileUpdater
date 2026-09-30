@@ -195,8 +195,11 @@ func runDevice(ctx context.Context, job Job, d workspace.Device, send func(Event
 	if err != nil {
 		dr.Error = redact("connect: "+err.Error(), d.Password)
 		msg := "device unreachable"
-		if ctx.Err() != nil {
+		switch {
+		case ctx.Err() != nil:
 			msg = "cancelled"
+		case errors.Is(err, transport.ErrHostKey):
+			msg = "host key mismatch"
 		}
 		failAll(&dr, job.Files, 0, msg)
 		return

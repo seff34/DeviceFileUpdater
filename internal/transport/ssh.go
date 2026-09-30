@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"sync"
@@ -66,6 +67,7 @@ func DialSSH(ctx context.Context, addr, user, pass string, opt Options) (Session
 		if isSSHAuthError(err) {
 			return nil, fmt.Errorf("ssh %s: %w", addr, ErrAuth)
 		}
+		// x/crypto wraps the host key callback error with %w, so ErrHostKey survives.
 		return nil, fmt.Errorf("ssh handshake %s: %w", addr, err)
 	}
 	conn.SetDeadline(time.Time{})
@@ -84,22 +86,37 @@ func DialSSH(ctx context.Context, addr, user, pass string, opt Options) (Session
 }
 
 func (s *SSHSession) startPTY(ctx context.Context) error {
-	sess, err := s.client.NewSession()
+	var (
+		stdin  io.WriteCloser
+		stdout io.Reader
+	)
+	err := doCtx(ctx, func() { s.client.Close() }, func() error {
+		sess, err := s.client.NewSession()
+		if err != nil {
+			return err
+		}
+		if err := sess.RequestPty("vt100", 40, 1000, ssh.TerminalModes{ssh.ECHO: 0}); err != nil {
+			sess.Close()
+			return err
+		}
+		in, err := sess.StdinPipe()
+		if err != nil {
+			sess.Close()
+			return err
+		}
+		out, err := sess.StdoutPipe()
+		if err != nil {
+			sess.Close()
+			return err
+		}
+		if err := sess.Shell(); err != nil {
+			sess.Close()
+			return err
+		}
+		stdin, stdout = in, out
+		return nil
+	})
 	if err != nil {
-		return err
-	}
-	if err := sess.RequestPty("vt100", 40, 1000, ssh.TerminalModes{ssh.ECHO: 0}); err != nil {
-		return err
-	}
-	stdin, err := sess.StdinPipe()
-	if err != nil {
-		return err
-	}
-	stdout, err := sess.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	if err := sess.Shell(); err != nil {
 		return err
 	}
 	m := shell.NewMarkerSession(stdout, stdin, "\n")
@@ -111,17 +128,49 @@ func (s *SSHSession) startPTY(ctx context.Context) error {
 	return nil
 }
 
+// doCtx runs fn, calling abort (which must unblock fn) if ctx ends first.
+// It returns ctx.Err() without waiting for fn, so fn must only publish
+// results through variables read after a nil return.
+func doCtx(ctx context.Context, abort func(), fn func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- fn() }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		abort()
+		return ctx.Err()
+	}
+}
+
 func (s *SSHSession) execChannel(ctx context.Context, cmd string) (string, int, error) {
-	sess, err := s.client.NewSession()
+	// NewSession and Start wait for the device without a deadline; if ctx
+	// ends first the client is closed: a device that stalls a channel open
+	// or exec reply is wedged, and closing is the only way to unblock them.
+	var (
+		buf  syncBuffer
+		sess *ssh.Session
+	)
+	err := doCtx(ctx, func() { s.client.Close() }, func() error {
+		ss, err := s.client.NewSession()
+		if err != nil {
+			return err
+		}
+		ss.Stdout, ss.Stderr = &buf, &buf
+		if err := ss.Start(cmd); err != nil {
+			ss.Close()
+			return err
+		}
+		sess = ss
+		return nil
+	})
 	if err != nil {
 		return "", -1, err
 	}
 	defer sess.Close()
-	var buf syncBuffer
-	sess.Stdout, sess.Stderr = &buf, &buf
-	if err := sess.Start(cmd); err != nil {
-		return "", -1, err
-	}
 	done := make(chan error, 1)
 	go func() { done <- sess.Wait() }()
 	select {

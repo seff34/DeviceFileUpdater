@@ -95,10 +95,13 @@ export async function testConnection(hosts: string[], onResult: (r: CheckResult)
     signal,
   })
   if (!res.ok || !res.body) return fail(res)
+  let done = false
   await readNdjson(res.body, (v) => {
     const o = v as CheckResult & { done?: boolean }
-    if (!o.done) onResult(o)
+    if (o.done) done = true
+    else onResult(o)
   })
+  if (!done) throw new Error('Bağlantı testi yarıda kesildi, sonuçlar eksik olabilir.')
 }
 
 /**

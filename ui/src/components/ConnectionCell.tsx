@@ -24,7 +24,7 @@ export function ConnectionCell({ check }: { check: CheckView }) {
       <CheckCircle size={16} weight="bold" className="mt-0.5 shrink-0 text-ok" aria-hidden />
       <span className="min-w-0">
         <span className="block">
-          <span className="font-mono uppercase">{check.protocol}</span> · yükleme <span className="font-mono">{upload}</span> · hash{' '}
+          <span className="font-medium">Bağlandı</span> · <span className="font-mono uppercase">{check.protocol}</span> · yükleme <span className="font-mono">{upload}</span> · hash{' '}
           <span className="font-mono">{check.hash_method || 'yok'}</span>
         </span>
         {check.tools && check.tools.length > 0 && (

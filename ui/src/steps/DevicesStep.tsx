@@ -41,9 +41,25 @@ export function DevicesStep() {
     return c !== undefined && c !== 'testing' && !c.ok
   })
   const selectedHosts = hosts.filter((h) => selected.has(h))
-  const canTest = state === 'saved' && draft.length > 0 && errors.every((e) => e === null) && !testing
+  const ready = q.isSuccess
+  const canTest = ready && state === 'saved' && draft.length > 0 && errors.every((e) => e === null) && !testing
 
-  const update = (i: number, patch: Partial<Device>) => setDraft(draft.map((d, j) => (j === i ? { ...d, ...patch } : d)))
+  const update = (i: number, patch: Partial<Device>) => {
+    const old = draft[i].host.trim()
+    // A changed credential or host invalidates that row's earlier test result.
+    setChecks((c) => {
+      if (!(old in c)) return c
+      const rest = { ...c }
+      delete rest[old]
+      return rest
+    })
+    setDraft(draft.map((d, j) => (j === i ? { ...d, ...patch } : d)))
+  }
+  const apply = (next: Device[]) => {
+    setReveal(new Set())
+    setTouched(new Set())
+    setDraft(next)
+  }
   const remove = (i: number) => {
     setDraft(draft.filter((_, j) => j !== i))
     setReveal(new Set())
@@ -93,14 +109,18 @@ export function DevicesStep() {
     <StepPage
       step="devices"
       action={{ onBack: () => navigate('/workspace'), onPrimary: () => navigate('/files'), blocker }}
-      aside={<div className="flex items-center gap-4"><span className="text-sm tabular-nums text-muted-foreground">{draft.length} cihaz</span><SaveIndicator state={state} error={error} /></div>}
+      aside={<div className="flex items-center gap-4"><span className="text-sm tabular-nums text-muted-foreground">{draft.length} cihaz</span>{ready && <SaveIndicator state={state} error={error} />}</div>}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button onClick={add}><Plus aria-hidden /> Cihaz ekle</Button>
-        <Button variant="outline" onClick={() => setBulkOpen(true)}><Rows aria-hidden /> Toplu ekle</Button>
-        <Button variant="outline" asChild>
-          <a href={EXPORT_DEVICES_URL} download="devices.csv"><DownloadSimple aria-hidden /> CSV dışa aktar</a>
-        </Button>
+        <Button onClick={add} disabled={!ready}><Plus aria-hidden /> Cihaz ekle</Button>
+        <Button variant="outline" onClick={() => setBulkOpen(true)} disabled={!ready}><Rows aria-hidden /> Toplu ekle</Button>
+        {ready ? (
+          <Button variant="outline" asChild>
+            <a href={EXPORT_DEVICES_URL} download="devices.csv"><DownloadSimple aria-hidden /> CSV dışa aktar</a>
+          </Button>
+        ) : (
+          <Button variant="outline" disabled><DownloadSimple aria-hidden /> CSV dışa aktar</Button>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {selectedHosts.length > 0 && (
             <Button variant="outline" disabled={!canTest} onClick={() => runTest(selectedHosts)}>
@@ -238,7 +258,7 @@ export function DevicesStep() {
         </div>
       )}
 
-      <BulkImportDialog open={bulkOpen} onOpenChange={setBulkOpen} existing={draft} onApply={setDraft} />
+      <BulkImportDialog open={bulkOpen} onOpenChange={setBulkOpen} existing={draft} onApply={apply} />
       <ConfirmDialog
         open={confirmRemove}
         onOpenChange={setConfirmRemove}
@@ -246,7 +266,7 @@ export function DevicesStep() {
         description={<>Bağlantı testinde başarısız olan {unreachable.length} cihaz listeden silinecek: <span className="font-mono">{unreachable.join(', ')}</span></>}
         confirmLabel="Çıkar"
         destructive
-        onConfirm={() => setDraft(draft.filter((d) => !unreachable.includes(d.host.trim())))}
+        onConfirm={() => apply(draft.filter((d) => !unreachable.includes(d.host.trim())))}
       />
     </StepPage>
   )

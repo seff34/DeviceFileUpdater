@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DevicesStep } from './DevicesStep'
-import { mockApi, renderWithProviders, type Call } from '@/test/utils'
+import { json, mockApi, renderWithProviders, type Call } from '@/test/utils'
 import type { Device } from '@/lib/types'
 
 let saved: Device[]
@@ -81,5 +81,41 @@ describe('DevicesStep', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Listeye ekle (1)' }))
     await waitFor(() => expect(puts().length).toBeGreaterThan(0), { timeout: 2000 })
     expect((puts().at(-1)!.body as { devices: Device[] }).devices.map((d) => d.host)).toEqual(['10.0.0.1', '10.0.0.2', '10.0.0.5'])
+  })
+  it('keeps editing actions disabled while loading and after a load error', async () => {
+    calls = mockApi({
+      '/api/workspace': { current: '/srv/ws', recent: [] },
+      'GET /api/devices': () => json({ error: 'devices.csv okunamadı' }, 500),
+      '/api/manifest': { entries: [] },
+      '/api/settings': {},
+      '/api/runs/current': { state: 'idle' },
+    })
+    renderWithProviders(<DevicesStep />, { path: '/devices' })
+    expect(screen.getByRole('button', { name: 'Cihaz ekle' })).toBeDisabled()
+    expect(await screen.findByText('devices.csv okunamadı')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cihaz ekle' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Toplu ekle' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Tümünü test et' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'CSV dışa aktar' })).toBeDisabled()
+    expect(screen.queryByText('Kaydedildi')).not.toBeInTheDocument()
+    expect(puts()).toHaveLength(0)
+  })
+  it('hides revealed passwords after a bulk replace', async () => {
+    renderWithProviders(<DevicesStep />, { path: '/devices' })
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Şifreyi göster' }))[0])
+    expect(screen.getByLabelText('Şifre, satır 1')).toHaveAttribute('type', 'text')
+    await userEvent.click(screen.getByRole('button', { name: 'Toplu ekle' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByLabelText('Cihaz satırları'))
+    await userEvent.paste('10.0.0.7\troot\tyeni')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Listeyi bununla değiştir (1)' }))
+    expect(await screen.findByLabelText('Şifre, satır 1')).toHaveAttribute('type', 'password')
+  })
+  it('clears a connection result when the row is edited', async () => {
+    renderWithProviders(<DevicesStep />, { path: '/devices' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Tümünü test et' }))
+    expect(await screen.findByText('Bağlandı')).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Şifre, satır 1'), 'x')
+    expect(screen.queryByText('Bağlandı')).not.toBeInTheDocument()
   })
 })

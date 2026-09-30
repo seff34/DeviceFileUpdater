@@ -78,6 +78,7 @@ func (s *Server) Token() string         { return s.token }
 func (s *Server) routes() {
 	s.registerWorkspace()
 	s.registerData()
+	s.registerCheck()
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Bilinmeyen API adresi: "+r.URL.Path)
 	})

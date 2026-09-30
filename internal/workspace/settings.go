@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 )
@@ -46,7 +47,10 @@ func SaveSettings(path string, s Settings) error {
 		return err
 	}
 	b, _ := json.MarshalIndent(s, "", "  ")
-	return os.WriteFile(path, b, 0o644)
+	return writeAtomic(path, 0o644, func(w io.Writer) error {
+		_, err := w.Write(b)
+		return err
+	})
 }
 
 func (s Settings) Validate() error {

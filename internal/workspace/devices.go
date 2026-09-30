@@ -119,3 +119,24 @@ func SaveDevices(path string, ds []Device) error {
 	// Atomic rename
 	return os.Rename(f.Name(), path)
 }
+
+// ValidateDevices applies the devices.csv rules to an edited list. Row numbers
+// in errors are 1-based positions in ds. An empty list is valid (a draft).
+func ValidateDevices(ds []Device) error {
+	seen := map[string]bool{}
+	for i, d := range ds {
+		n := i + 1
+		host, user := strings.TrimSpace(d.Host), strings.TrimSpace(d.Username)
+		if host == "" || user == "" {
+			return fmt.Errorf("device row %d: ip and username are required", n)
+		}
+		if strings.ContainsAny(host, " \t\r\n") {
+			return fmt.Errorf("device row %d: ip must not contain spaces: %q", n, host)
+		}
+		if seen[host] {
+			return fmt.Errorf("device row %d: duplicate ip %s", n, host)
+		}
+		seen[host] = true
+	}
+	return nil
+}

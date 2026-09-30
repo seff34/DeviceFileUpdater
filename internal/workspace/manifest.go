@@ -4,7 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,7 +25,7 @@ type Entry struct {
 var manifestHeader = []string{"local_path", "remote_path", "mode"}
 var modeRe = regexp.MustCompile(`^[0-7]{3,4}$`)
 
-func LoadManifest(path string) ([]Entry, error) {
+func readManifest(path string) ([]Entry, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -44,7 +47,7 @@ func LoadManifest(path string) ([]Entry, error) {
 			return nil, fmt.Errorf("manifest.csv: header must be %s", strings.Join(manifestHeader, ","))
 		}
 	}
-	var es []Entry
+	es := []Entry{}
 	for _, r := range rows[1:] {
 		es = append(es, Entry{
 			LocalPath:  strings.TrimSpace(r[0]),
@@ -52,25 +55,37 @@ func LoadManifest(path string) ([]Entry, error) {
 			Mode:       strings.TrimSpace(r[2]),
 		})
 	}
+	return es, nil
+}
+
+func LoadManifest(path string) ([]Entry, error) {
+	es, err := readManifest(path)
+	if err != nil {
+		return nil, err
+	}
 	return es, ValidateEntries(es)
 }
 
+// LoadManifestDraft reads manifest.csv for editing: a missing file is an
+// empty list and rows are returned unvalidated.
+func LoadManifestDraft(path string) ([]Entry, error) {
+	es, err := readManifest(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	return es, err
+}
+
 func SaveManifest(path string, es []Entry) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	w := csv.NewWriter(f)
-	w.Write(manifestHeader)
-	for _, e := range es {
-		w.Write([]string{e.LocalPath, e.RemotePath, e.Mode})
-	}
-	w.Flush()
-	if err := w.Error(); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
+	return writeAtomic(path, 0o644, func(w io.Writer) error {
+		cw := csv.NewWriter(w)
+		cw.Write(manifestHeader)
+		for _, e := range es {
+			cw.Write([]string{e.LocalPath, e.RemotePath, e.Mode})
+		}
+		cw.Flush()
+		return cw.Error()
+	})
 }
 
 func ValidateEntries(es []Entry) error {

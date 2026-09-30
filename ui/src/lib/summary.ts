@@ -73,3 +73,18 @@ export function filterDevices(r: RunResult, filter: MatrixFilter) {
   return r.devices.filter((d) => (filter === 'all' ? true : filter === 'failed' ? deviceFailed(d) : changes(d)))
 }
 
+
+/**
+ * The engine reports a device cancelled mid-flight in several shapes: a file error "cancelled"
+ * with an empty device error, or a device error ending in "context canceled" / "operation was canceled".
+ */
+export function isCancelled(d: { error?: string; files: { error?: string }[] }): boolean {
+  if (d.files.some((f) => f.error === 'cancelled')) return true
+  const e = d.error
+  return !!e && (e === 'cancelled' || e.endsWith('context canceled') || e.endsWith('operation was canceled'))
+}
+
+export const CANCELLED_TEXT = 'İptal edildi'
+
+/** Turkish text for a file error; never the raw English engine string. */
+export const fileErrorText = (error: string | undefined): string => (error === 'cancelled' ? CANCELLED_TEXT : (error ?? ''))

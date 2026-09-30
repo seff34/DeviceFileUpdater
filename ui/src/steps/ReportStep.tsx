@@ -1,5 +1,27 @@
+import { useQuery } from '@tanstack/react-query'
+import { ReportView } from '@/components/ReportView'
 import { StepPage } from '@/components/StepPage'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
+import { api } from '@/lib/api'
+import { navigate } from '@/lib/router'
+import { useWizard } from '@/wizard/WizardContext'
 
 export function ReportStep() {
-  return <StepPage step="report" action={{}}>{null}</StepPage>
+  const { facts } = useWizard()
+  const id = facts.run && !facts.run.dry_run ? (facts.run.report_id ?? '') : ''
+  const q = useQuery({ queryKey: ['report', id], queryFn: () => api.report(id), enabled: !!id })
+  return (
+    <StepPage step="report" action={{ onBack: () => navigate('/apply'), primaryLabel: 'Yeni önizleme', onPrimary: () => navigate('/preview') }}>
+      {!id ? (
+        <p className="rounded-md border bg-card p-6 text-sm text-muted-foreground">Henüz tamamlanmış bir uygulama yok.</p>
+      ) : q.isPending ? (
+        <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16" />)}</div>
+      ) : q.isError ? (
+        <Alert variant="destructive"><AlertDescription>{(q.error as Error).message}</AlertDescription></Alert>
+      ) : (
+        <ReportView result={q.data} reportId={id} allowRetry />
+      )}
+    </StepPage>
+  )
 }

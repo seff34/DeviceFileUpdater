@@ -1,5 +1,6 @@
 import { CheckCircle, Circle, CircleNotch, XCircle } from '@phosphor-icons/react'
 import { memo, useMemo } from 'react'
+import { CANCELLED_TEXT, isCancelled } from '@/lib/summary'
 import { STAGE_LABEL, STATUS_META } from '@/lib/status'
 import type { DeviceView, RunView } from '@/lib/runState'
 import type { FileResult, Status } from '@/lib/types'
@@ -34,10 +35,9 @@ function fileSummary(files: FileResult[]): string {
 }
 
 function detail(d: DeviceView): { text: string; tone?: string } {
-  if (d.error === 'cancelled' || d.error?.endsWith('context canceled')) return { text: 'İptal edildi', tone: 'text-fail' }
+  if (isCancelled(d)) return { text: CANCELLED_TEXT, tone: 'text-fail' }
   if (d.error) return { text: d.error, tone: 'text-fail' }
   const failed = d.files.find((f) => f.status === 'FAILED')
-  if (failed?.error === 'cancelled') return { text: 'İptal edildi', tone: 'text-fail' }
   if (failed) return { text: `${failed.remote}: ${failed.error ?? 'başarısız'}`, tone: 'text-fail' }
   if (d.files.length) return { text: fileSummary(d.files) }
   return { text: '' }

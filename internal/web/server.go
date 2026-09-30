@@ -76,6 +76,7 @@ func (s *Server) Token() string         { return s.token }
 
 // routes is the single registration point; later tasks add their handlers here.
 func (s *Server) routes() {
+	s.registerWorkspace()
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Bilinmeyen API adresi: "+r.URL.Path)
 	})
@@ -93,16 +94,6 @@ func (s *Server) setWorkspace(dir string) {
 	s.ws = dir
 	s.mu.Unlock()
 	s.recent.add(dir)
-}
-
-// openWorkspace is completed in Task 3; until then it only accepts existing dirs.
-func (s *Server) openWorkspace(dir string, create bool) error {
-	st, err := os.Stat(dir)
-	if err != nil || !st.IsDir() {
-		return fmt.Errorf("workspace %s: not a directory", dir)
-	}
-	s.setWorkspace(dir)
-	return nil
 }
 
 // Listen binds the address and returns the launch URL carrying the token.

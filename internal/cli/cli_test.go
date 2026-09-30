@@ -135,3 +135,15 @@ func TestSuccessfulRunExitsZero(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestHelpExitsZero(t *testing.T) {
+	for _, args := range [][]string{{"-h"}, {"-help"}, {"--help"}, {"run", "-h"}, {"run", "-help"}} {
+		var out, errb bytes.Buffer
+		if code := Main(args, &out, &errb); code != 0 {
+			t.Errorf("%v: exit %d", args, code)
+		}
+		if !strings.Contains(out.String()+errb.String(), "-workspace") {
+			t.Errorf("%v: no usage printed: %q %q", args, out.String(), errb.String())
+		}
+	}
+}

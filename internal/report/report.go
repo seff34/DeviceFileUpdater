@@ -2,6 +2,7 @@
 package report
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -56,6 +57,11 @@ func Save(dir string, r model.RunResult) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Render first so a template error leaves no .json without its .html.
+	var page bytes.Buffer
+	if err := WriteHTML(&page, r); err != nil {
+		return "", err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -63,15 +69,10 @@ func Save(dir string, r model.RunResult) (string, error) {
 		return "", err
 	}
 	htmlPath := filepath.Join(dir, r.ID+".html")
-	f, err := os.Create(htmlPath)
-	if err != nil {
+	if err := os.WriteFile(htmlPath, page.Bytes(), 0o644); err != nil {
 		return "", err
 	}
-	if err := WriteHTML(f, r); err != nil {
-		f.Close()
-		return "", err
-	}
-	return htmlPath, f.Close()
+	return htmlPath, nil
 }
 
 func Load(path string) (model.RunResult, error) {

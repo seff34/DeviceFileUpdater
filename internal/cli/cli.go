@@ -29,6 +29,10 @@ var runJob = runner.Run
 // Main runs the CLI and returns the process exit code:
 // 0 all devices ok, 1 some device failed, 2 usage or configuration error.
 func Main(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "-help" || args[0] == "--help") {
+		fmt.Fprint(stdout, usage)
+		return 0
+	}
 	if len(args) == 0 || args[0] != "run" {
 		fmt.Fprint(stderr, usage)
 		return 2
@@ -53,6 +57,9 @@ func runCmd(args []string, stdout, stderr io.Writer) int {
 	parallel := fs.Int("parallel", 0, "devices at once (0 = settings.json)")
 	onlyFailed := fs.String("only-failed", "", "report ID whose failed devices to retry")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0 // flag already printed the options
+		}
 		return 2
 	}
 	if fs.NArg() > 0 {

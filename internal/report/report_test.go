@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"html/template"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,5 +87,39 @@ func TestZeroTimesAndDryRun(t *testing.T) {
 	}
 	if !strings.Contains(b.String(), "dry-run") {
 		t.Fatal("dry-run marker missing")
+	}
+}
+
+// A template failure must not leave a .json without its .html (or a partial .html).
+func TestSaveWritesNothingOnTemplateError(t *testing.T) {
+	old := tmpl
+	tmpl = template.Must(template.New("report").Parse(`partial{{template "missing"}}`))
+	t.Cleanup(func() { tmpl = old })
+	dir := t.TempDir()
+	if _, err := Save(dir, sample()); err == nil {
+		t.Fatal("expected template error")
+	}
+	if ents, _ := os.ReadDir(dir); len(ents) != 0 {
+		t.Fatalf("files written: %v", ents)
+	}
+}
+
+// Device-supplied text must not inject terminal escapes into the console.
+func TestConsoleEscapesControlChars(t *testing.T) {
+	r := sample()
+	r.Devices[1].Error = "boom\x1b[2J\x1b]0;pwned\x07\r\nnext\tcol"
+	r.Devices = append(r.Devices, model.DeviceResult{Host: "10.0.0.3",
+		Files: []model.FileResult{{Remote: "/x", Status: model.Failed, Error: "bad\x1b[31mred"}},
+		Post:  &model.PostResult{ExitCode: 1, Error: "e\x9b1m"}})
+	var b bytes.Buffer
+	PrintConsole(&b, r)
+	out := b.String()
+	if strings.ContainsAny(out, "\x1b\x07\r\x9b") || strings.Contains(out, "\u009b") {
+		t.Fatalf("raw control characters in console output: %q", out)
+	}
+	for _, want := range []string{`boom\x1b[2J\x1b]0;pwned\a\r\nnext` + "\tcol", `bad\x1b[31mred`, `e\x9b1m`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in %q", want, out)
+		}
 	}
 }

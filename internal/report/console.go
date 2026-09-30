@@ -3,9 +3,34 @@ package report
 import (
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"devupdater/internal/model"
 )
+
+// clean makes device-supplied text safe for a terminal: control characters
+// (except tab) and invalid UTF-8 bytes become visible Go-style escapes, so an
+// error message cannot move the cursor, recolour or retitle the console.
+func clean(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		r, n := utf8.DecodeRuneInString(s[i:])
+		switch {
+		case r == utf8.RuneError && n == 1:
+			fmt.Fprintf(&b, `\x%02x`, s[i])
+		case r != '\t' && unicode.IsControl(r):
+			q := strconv.QuoteRune(r)
+			b.WriteString(q[1 : len(q)-1])
+		default:
+			b.WriteString(s[i : i+n])
+		}
+		i += n
+	}
+	return b.String()
+}
 
 func PrintConsole(w io.Writer, r model.RunResult) {
 	c := Summarize(r)
@@ -23,18 +48,18 @@ func PrintConsole(w io.Writer, r model.RunResult) {
 		if !d.Failed() {
 			continue
 		}
-		fmt.Fprintf(w, "FAILED %s", d.Host)
+		fmt.Fprintf(w, "FAILED %s", clean(d.Host))
 		if d.Error != "" {
-			fmt.Fprintf(w, ": %s", d.Error)
+			fmt.Fprintf(w, ": %s", clean(d.Error))
 		}
 		fmt.Fprintln(w)
 		for _, f := range d.Files {
 			if f.Status == model.Failed && d.Error == "" {
-				fmt.Fprintf(w, "  %s: %s\n", f.Remote, f.Error)
+				fmt.Fprintf(w, "  %s: %s\n", clean(f.Remote), clean(f.Error))
 			}
 		}
 		if d.Post != nil && (d.Post.ExitCode != 0 || d.Post.Error != "") {
-			fmt.Fprintf(w, "  post command exit %d %s\n", d.Post.ExitCode, d.Post.Error)
+			fmt.Fprintf(w, "  post command exit %d %s\n", d.Post.ExitCode, clean(d.Post.Error))
 		}
 	}
 }

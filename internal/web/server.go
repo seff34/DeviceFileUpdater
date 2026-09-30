@@ -125,9 +125,9 @@ func (s *Server) Serve(ctx context.Context) error {
 	case err := <-errc:
 		return err
 	case <-ctx.Done():
+		s.shutdownHooks()
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		s.shutdownHooks()
 		hs.Shutdown(sctx)
 		return nil
 	}

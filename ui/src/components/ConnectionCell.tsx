@@ -1,4 +1,5 @@
 import { CheckCircle, CircleNotch, XCircle } from '@phosphor-icons/react'
+import { ErrorText } from '@/components/ErrorText'
 import type { CheckResult } from '@/lib/types'
 
 export type CheckView = CheckResult | 'testing' | undefined
@@ -15,7 +16,7 @@ export function ConnectionCell({ check }: { check: CheckView }) {
     return (
       <span className="flex min-w-0 items-start gap-1.5 text-sm text-fail">
         <XCircle size={16} weight="bold" className="mt-0.5 shrink-0" aria-hidden />
-        <span className="line-clamp-2 break-words" title={check.error}>{check.error}</span>
+        <ErrorText raw={check.error ?? ''} />
       </span>
     )
   const upload = check.upload_methods?.[0] ?? 'yok'

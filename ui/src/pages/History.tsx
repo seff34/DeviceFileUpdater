@@ -13,11 +13,9 @@ import type { Status } from '@/lib/types'
 function Page({ title, back, children }: { title: string; back?: boolean; children: ReactNode }) {
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
-      {back && (
-        <Link to="/history" className="mb-3 inline-flex items-center gap-1 rounded-md text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-          <ArrowLeft size={14} aria-hidden /> Geçmiş raporlar
-        </Link>
-      )}
+      <Link to={back ? '/history' : '/'} className="mb-3 inline-flex items-center gap-1 rounded-md text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+        <ArrowLeft size={14} aria-hidden /> {back ? 'Geçmiş raporlar' : 'Sihirbaza dön'}
+      </Link>
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">{title}</h1>
       {children}
     </main>
@@ -56,7 +54,7 @@ export function History() {
         <ul className="divide-y rounded-md border bg-card">
           {q.data.map((r) => (
             <li key={r.id}>
-              <Link to={`/history/${r.id}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3 text-sm outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid-cols-[12rem_7rem_9rem_minmax(0,1fr)_auto]">
+              <Link to={`/history/${r.id}`} className="grid grid-cols-1 gap-x-4 gap-y-0.5 px-4 py-3 text-sm outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid-cols-[12rem_7rem_9rem_minmax(0,1fr)_auto] md:items-center md:gap-y-1">
                 <span className="font-mono">{r.id}</span>
                 <span className="text-muted-foreground">{r.dry_run ? 'Önizleme' : 'Uygulama'}</span>
                 <span className="tabular-nums">

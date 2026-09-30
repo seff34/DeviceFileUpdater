@@ -51,7 +51,9 @@ describe('ApplyStep', () => {
     expect(within(row1).getByText('1/2')).toBeInTheDocument()
     const row2 = screen.getByRole('row', { name: /10\.0\.0\.2/ })
     expect(within(row2).getByText('Başarısız')).toBeInTheDocument()
-    expect(within(row2).getByText('connect: connection refused')).toBeInTheDocument()
+    // The cell explains the error in Turkish and keeps the raw engine text in its tooltip.
+    const err = within(row2).getByText('Cihaz yanıt verdi ama SSH ve Telnet portu kapalı. IP ve portu kontrol edin.')
+    expect(err).toHaveAttribute('title', 'connect: connection refused')
     expect(screen.getByText('Uygulama sürüyor.')).toBeInTheDocument()
 
     const result: RunResult = {
@@ -154,7 +156,7 @@ describe('ApplyStep', () => {
       await new Promise((r) => requestAnimationFrame(() => r(null)))
     })
     const row = screen.getByRole('row', { name: /10\.0\.0\.1/ })
-    expect(within(row).getByText(/permission denied/)).toBeInTheDocument()
+    expect(within(row).getByText('/etc/a: Cihazda bu yola yazma izni yok.')).toHaveAttribute('title', 'permission denied')
     expect(within(row).queryByText('İptal edildi')).not.toBeInTheDocument()
   })
 

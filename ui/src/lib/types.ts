@@ -17,7 +17,7 @@ export interface Settings {
 }
 export interface WorkspaceState { current: string; recent: string[] }
 export interface FsEntry { name: string; path: string; is_workspace: boolean }
-export interface FsListing { path: string; parent: string; entries: FsEntry[]; roots: string[] }
+export interface FsListing { path: string; parent: string; is_workspace?: boolean; entries: FsEntry[]; roots: string[] }
 export interface CheckResult {
   host: string
   ok: boolean

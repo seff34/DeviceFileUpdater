@@ -1,4 +1,5 @@
 import { CheckCircle, Circle, CircleNotch, XCircle } from '@phosphor-icons/react'
+import { explainError } from '@/lib/explain'
 import { memo, useMemo } from 'react'
 import { CANCELLED_TEXT, hasRealError, isCancelled } from '@/lib/summary'
 import { STAGE_LABEL, STATUS_META } from '@/lib/status'
@@ -34,11 +35,12 @@ function fileSummary(files: FileResult[]): string {
   return [...counts].map(([s, n]) => `${n} ${STATUS_META[s].label.toLocaleLowerCase('tr-TR')}`).join(' · ')
 }
 
-function detail(d: DeviceView): { text: string; tone?: string } {
+// The cell is one line: it shows the Turkish explanation and keeps the raw error in the tooltip.
+function detail(d: DeviceView): { text: string; tone?: string; raw?: string } {
   if (isCancelled(d)) return { text: CANCELLED_TEXT, tone: 'text-fail' }
-  if (hasRealError(d)) return { text: d.error!, tone: 'text-fail' }
+  if (hasRealError(d)) return { text: explainError(d.error) || d.error!, tone: 'text-fail', raw: d.error }
   const failed = d.files.find((f) => f.status === 'FAILED' && f.error !== 'cancelled')
-  if (failed) return { text: `${failed.remote}: ${failed.error ?? 'başarısız'}`, tone: 'text-fail' }
+  if (failed) return { text: `${failed.remote}: ${explainError(failed.error) || failed.error || 'başarısız'}`, tone: 'text-fail', raw: failed.error }
   if (d.files.length) return { text: fileSummary(d.files) }
   return { text: '' }
 }
@@ -64,7 +66,7 @@ const RunRow = memo(function RunRow({ d }: { d: DeviceView }) {
           </div>
         </div>
       </td>
-      <td className={cn('truncate border-b px-3', det.tone ?? 'text-muted-foreground')} title={det.text || undefined}>{det.text}</td>
+      <td className={cn('truncate border-b px-3', det.tone ?? 'text-muted-foreground')} title={det.raw ?? (det.text || undefined)}>{det.text}</td>
     </tr>
   )
 })

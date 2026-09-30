@@ -49,6 +49,8 @@ describe('FilesStep', () => {
     await userEvent.upload(screen.getByLabelText('Dosya yükle'), file)
     const remote = await screen.findByLabelText('Hedef yol, satır 2')
     await waitFor(() => expect(remote).toHaveFocus())
+    expect(screen.getByText('1 dosyanın cihazdaki hedef yolunu yazın.')).toBeInTheDocument()
+    expect(remote).toHaveAttribute('placeholder', 'örn. /opt/app/start.sh')
     await userEvent.type(remote, '/usr/local/bin/')
     await userEvent.tab()
     expect(remote).toHaveValue('/usr/local/bin/start.sh')

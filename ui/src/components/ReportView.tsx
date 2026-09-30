@@ -1,4 +1,5 @@
 import { ArrowClockwise, ArrowSquareOut, CaretRight, CheckCircle, DownloadSimple, XCircle } from '@phosphor-icons/react'
+import { ErrorText } from '@/components/ErrorText'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fragment, memo, useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -54,7 +55,7 @@ const DeviceRow = memo(function DeviceRow({ d, expanded, onToggle }: { d: Device
             {failed ? <XCircle size={16} weight="bold" aria-hidden /> : <CheckCircle size={16} weight="bold" aria-hidden />}
             {cancelled ? CANCELLED_TEXT : failed ? 'Başarısız' : 'Başarılı'}
           </span>
-          {hasRealError(d) && <p className="mt-0.5 max-w-80 truncate text-xs text-fail" title={d.error}>{d.error}</p>}
+          {hasRealError(d) && <ErrorText raw={d.error!} className="mt-0.5 max-w-80 text-xs" />}
         </td>
         <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{[d.protocol, d.upload_method, d.hash_method].filter(Boolean).join(' · ') || '-'}</td>
         <td className="px-3 py-2 tabular-nums text-muted-foreground">{formatDuration(d.duration_ms)}</td>
@@ -77,7 +78,7 @@ const DeviceRow = memo(function DeviceRow({ d, expanded, onToggle }: { d: Device
                   <StatusBadge status={f.status} />
                   <span className="hidden font-mono text-xs text-muted-foreground md:block">{f.method ?? ''}</span>
                   <span className="hidden text-xs tabular-nums text-muted-foreground md:block">{formatDuration(f.duration_ms)}</span>
-                  <span className="col-span-2 break-words text-xs text-fail md:col-span-1">{fileErrorText(f.error)}</span>
+                  <span className="col-span-2 min-w-0 text-xs text-fail md:col-span-1">{f.error === 'cancelled' || !f.error ? fileErrorText(f.error) : <ErrorText raw={f.error} />}</span>
                 </li>
               ))}
             </ul>

@@ -124,14 +124,18 @@ export function FilesStep() {
   }
 
   const totalSize = draft.reduce((n, r) => n + r.file.size, 0)
+  // Fresh uploads have no target yet and their rows stay quiet until touched, so the bar names the gap.
+  const missingTarget = draft.filter((r) => !r.remote_path.trim()).length
   const blocker = q.isPending
     ? 'Dosya listesi yükleniyor.'
     : q.isError
       ? 'Dosya listesi yüklenemedi.'
       : draft.length === 0
         ? 'En az bir dosya ekleyin.'
-        : !rowsValid(draft)
-          ? 'Dosya satırlarındaki hataları düzeltin.'
+        : missingTarget > 0
+          ? `${missingTarget} dosyanın cihazdaki hedef yolunu yazın.`
+          : !rowsValid(draft)
+            ? 'Dosya satırlarındaki hataları düzeltin.'
           : saveBlocker(state, error)
 
   return (
@@ -246,7 +250,7 @@ export function FilesStep() {
                         onBlur={() => completeRemote(i)}
                         aria-invalid={!!remoteErr}
                         aria-describedby={remoteErr ? `mf-remote-err-${i}` : undefined}
-                        placeholder={`/opt/app/${baseName(r.local_path)}`}
+                        placeholder={`örn. /opt/app/${baseName(r.local_path)}`}
                         className="h-9 font-mono"
                         spellCheck={false}
                       />

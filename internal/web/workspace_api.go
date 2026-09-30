@@ -176,7 +176,7 @@ func (s *Server) getFS(w http.ResponseWriter, r *http.Request) {
 	if parent == p {
 		parent = ""
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"path": p, "parent": parent, "entries": out, "roots": fsRoots()})
+	writeJSON(w, http.StatusOK, map[string]any{"path": p, "parent": parent, "is_workspace": isWorkspaceDir(p), "entries": out, "roots": fsRoots()})
 }
 
 // runActive reports whether a run is in progress.

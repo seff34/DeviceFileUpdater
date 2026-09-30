@@ -26,6 +26,23 @@ describe('FolderBrowser', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Bu klasörü kullan' }))
     expect(onOpen).toHaveBeenCalledWith('/home/op/saha', true)
   })
+  it('emphasises "Bu klasörü kullan" only inside a workspace, and creating once a name is typed', async () => {
+    mockApi({
+      '/api/workspace': { current: '', recent: [] },
+      '/api/fs': ({ url }: { url: string }) =>
+        url.includes('path=')
+          ? { ...listing('/home/op/hat-3', '/home/op', []), is_workspace: true }
+          : listing('/home/op', '/home', [['hat-3', true]]),
+    })
+    renderWithProviders(<FolderBrowser onOpen={vi.fn()} busy={false} />)
+    const use = await screen.findByRole('button', { name: 'Bu klasörü kullan' })
+    expect(use).toHaveAttribute('data-variant', 'outline')
+    await userEvent.click(await screen.findByRole('button', { name: /hat-3/ }))
+    await waitFor(() => expect(use).toHaveAttribute('data-variant', 'default'))
+    await userEvent.type(screen.getByLabelText('Yeni klasör adı'), 'yeni')
+    expect(use).toHaveAttribute('data-variant', 'outline')
+    expect(screen.getByRole('button', { name: 'Oluştur ve kullan' })).toHaveAttribute('data-variant', 'default')
+  })
   it('creates a named subfolder', async () => {
     mockApi({ '/api/workspace': { current: '', recent: [] }, '/api/fs': listing('/home/op', '/home', []) })
     const onOpen = vi.fn()

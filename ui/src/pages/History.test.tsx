@@ -36,6 +36,7 @@ describe('History', () => {
     mockApi({ ...ws, '/api/reports': { reports: [] } })
     renderWithProviders(<History />, { path: '/history' })
     expect(await screen.findByText(/henüz rapor yok/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Sihirbaza dön/ })).toHaveAttribute('href', '/')
   })
   it('shows an error alert when the list fails', async () => {
     mockApi({ ...ws, '/api/reports': () => json({ error: 'okunamadı' }, 500) })

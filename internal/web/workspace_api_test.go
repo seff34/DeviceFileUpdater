@@ -78,16 +78,24 @@ func TestFolderBrowser(t *testing.T) {
 			Path        string `json:"path"`
 			IsWorkspace bool   `json:"is_workspace"`
 		} `json:"entries"`
-		Roots []string `json:"roots"`
+		Roots       []string `json:"roots"`
+		IsWorkspace bool     `json:"is_workspace"`
 	}
 	if code := doJSON(t, c, "GET", ts.URL+"/api/fs?path="+root, nil, &got); code != 200 {
 		t.Fatalf("status %d", code)
 	}
-	if got.Path != root || got.Parent != filepath.Dir(root) || len(got.Roots) == 0 {
+	if got.Path != root || got.Parent != filepath.Dir(root) || len(got.Roots) == 0 || got.IsWorkspace {
 		t.Fatalf("header: %+v", got)
 	}
 	if len(got.Entries) != 2 || got.Entries[0].Name != "A-dir" || got.Entries[1].Name != "b-alan" || !got.Entries[1].IsWorkspace || got.Entries[0].IsWorkspace {
 		t.Fatalf("entries: %+v", got.Entries)
+	}
+	// The listed folder itself reports whether it is a workspace.
+	var inWS struct {
+		IsWorkspace bool `json:"is_workspace"`
+	}
+	if code := doJSON(t, c, "GET", ts.URL+"/api/fs?path="+filepath.Join(root, "b-alan"), nil, &inWS); code != 200 || !inWS.IsWorkspace {
+		t.Fatalf("workspace folder: %d %+v", code, inWS)
 	}
 	if code := doJSON(t, c, "GET", ts.URL+"/api/fs?path="+filepath.Join(root, "dosya.txt"), nil, nil); code != http.StatusUnprocessableEntity {
 		t.Fatalf("file as dir: %d", code)

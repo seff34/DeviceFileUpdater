@@ -1,4 +1,4 @@
-import { ClockCounterClockwise, FolderOpen } from '@phosphor-icons/react'
+import { ClockCounterClockwise, FolderOpen, Info } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
-import { navigate } from '@/lib/router'
+import { Link, navigate } from '@/lib/router'
 import { blocker } from '@/lib/steps'
 import { useWizard } from '@/wizard/WizardContext'
 
@@ -89,6 +89,16 @@ export function WorkspaceStep() {
               ))}
             </ul>
           </section>
+        )}
+
+        {showBrowser && !current && recent.length === 0 && (
+          <p className="flex items-start gap-2 rounded-md border bg-card p-4 text-sm text-muted-foreground">
+            <Info size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden />
+            <span>
+              İlk kez mi kullanıyorsunuz? Aşağıda çalışma alanını koyacağınız klasöre gidin (örn. Belgeler), <span className="font-medium text-foreground">Yeni klasör adı</span> alanına bir ad yazın ve <span className="font-medium text-foreground">Oluştur ve kullan</span> deyin. Adım adım anlatım için{' '}
+              <Link to="/help" className="text-primary underline-offset-4 hover:underline">Kullanım kılavuzu</Link>.
+            </span>
+          </p>
         )}
 
         {showBrowser && (

@@ -27,6 +27,12 @@ export function FolderBrowser({ onOpen, busy }: { onOpen: (path: string, create:
     setTyped(cur.path)
   }
 
+  // One filled button at a time: creating wins once a name is typed; using the listed folder
+  // is primary only when it already is a workspace, so a first-timer is never nudged into
+  // turning their home folder into one.
+  const creating = !!newName.trim()
+  const useIsPrimary = !creating && !!cur?.is_workspace
+
   const nameError = /[\\/]/.test(newName) ? 'Klasör adı / veya \\ içeremez.' : newName.trim() === '.' || newName.trim() === '..' ? 'Geçersiz klasör adı.' : null
 
   const go = (e: FormEvent) => {
@@ -101,11 +107,11 @@ export function FolderBrowser({ onOpen, busy }: { onOpen: (path: string, create:
             <Input id="fb-new" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="örn. hat-3-guncelleme" aria-invalid={!!nameError} aria-describedby={nameError ? 'fb-new-err' : undefined} />
             {nameError && <p id="fb-new-err" className="mt-1 text-xs text-fail">{nameError}</p>}
           </div>
-          <Button type="submit" variant="outline" disabled={!cur || !newName.trim() || !!nameError || busy}>
+          <Button type="submit" variant={creating ? 'default' : 'outline'} disabled={!cur || !newName.trim() || !!nameError || busy}>
             <FolderPlus aria-hidden /> Oluştur ve kullan
           </Button>
         </form>
-        <Button type="button" disabled={!cur || busy} onClick={() => onOpen(cur!.path, true)}>
+        <Button type="button" variant={useIsPrimary ? 'default' : 'outline'} disabled={!cur || busy} onClick={() => onOpen(cur!.path, true)}>
           Bu klasörü kullan
         </Button>
       </div>

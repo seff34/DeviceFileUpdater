@@ -221,6 +221,9 @@ Quiet and exact; the press is felt, not seen.
 ### Live Apply Grid (signature)
 A fixed-layout table (host, stage, files, detail) with 44px rows that update in place as events stream in. No row ever changes height or position. The stage cell crossfades opacity over 150ms on each change. The file counter is mono `done/total` with a 4px progress bar. A failed device counts only its succeeded files, so it shows "0/2" with a red bar, never "2/2". The detail cell truncates with the full text in its title. A "Başarısız" filter tab carries the count.
 
+### Error Text
+Every device or file error shows a Turkish explanation first (Fault Red) and the raw engine text below it as a one-line, clamped Geist Mono detail in quiet ink, with the full text in the tooltip. Unrecognised errors show the raw text alone. In one-line cells (the Apply grid) only the explanation is shown and the raw text lives in the tooltip.
+
 ### Preview Matrix
 Device × file grid. Each cell holds a status badge; an unreachable device spans the row with its error in Fault Red. It ends in an explicit confirmation checkbox that restates what will happen ("3 cihazda toplam 6 dosya yazılacak").
 

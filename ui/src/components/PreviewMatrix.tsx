@@ -1,4 +1,5 @@
 import { PlugsConnected } from '@phosphor-icons/react'
+import { ErrorText } from '@/components/ErrorText'
 import { memo } from 'react'
 import { StatusBadge } from '@/components/StatusBadge'
 import { baseName } from '@/lib/format'
@@ -15,7 +16,7 @@ const Row = memo(function Row({ d, files }: { d: DeviceResult; files: string[] }
         <td colSpan={files.length} className="border-b px-3 py-2 text-fail">
           <span className="flex items-start gap-1.5">
             <PlugsConnected size={16} weight="bold" className="mt-0.5 shrink-0" aria-hidden />
-            <span>{d.error}</span>
+            <ErrorText raw={d.error} />
           </span>
         </td>
       ) : (
@@ -26,7 +27,7 @@ const Row = memo(function Row({ d, files }: { d: DeviceResult; files: string[] }
               {fr ? (
                 <>
                   <StatusBadge status={fr.status} />
-                  {fr.error && <p className="mt-1 max-w-56 text-xs text-fail break-words">{fr.error}</p>}
+                  {fr.error && <ErrorText raw={fr.error} className="mt-1 max-w-56 text-xs" />}
                 </>
               ) : (
                 <span className="text-muted-foreground">-</span>

@@ -46,7 +46,7 @@ const GUIDE: Record<StepId, ReactNode[]> = {
 }
 
 const TROUBLE: { q: string; a: ReactNode }[] = [
-  { q: 'Cihaza ulaşılamadı', a: <>Bilgisayarın cihaz ağına bağlı olduğunu, IP ve portu kontrol edin. Hata metnindeki <Mono>connection refused</Mono> portun kapalı olduğunu, <Mono>timeout</Mono> cihaza ulaşılamadığını gösterir.</> },
+  { q: 'Cihaza ulaşılamadı', a: <>Kırmızı satır nedeni Türkçe söyler (port kapalı, zaman aşımı, ağ yok gibi). Altındaki gri teknik metin destek ekibi içindir. Bilgisayarın cihaz ağına bağlı olduğunu, IP ve portu kontrol edin.</> },
   { q: 'Kullanıcı adı veya şifre hatası', a: <>Cihaz satırındaki bilgileri düzeltip <B>Tümünü test et</B> ile tekrar deneyin.</> },
   { q: '"Oturum bulunamadı" ekranı', a: <>Sayfa güvenlik anahtarı olmadan açıldı veya uygulama kapandı. Uygulamayı yeniden başlatın; tarayıcı doğru adresle kendiliğinden açılır.</> },
   { q: 'Uygulamayı kapatmak', a: <>Tarayıcı sekmesini kapatmak yetmez. Uygulamanın terminal penceresini kapatın veya içinde Ctrl+C'ye basın.</> },

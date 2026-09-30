@@ -137,6 +137,11 @@ func (m *runManager) start(ws workspace.Workspace, req runRequest, job runner.Jo
 		(req.PreviewID == "" || req.PreviewID != m.preview.id || fp != m.preview.fp) {
 		return m.status, errStalePreview
 	}
+	if !req.DryRun {
+		// A live run changes device state, so the preview it relied on (or,
+		// for a retry, the one that predates it) no longer describes reality.
+		m.preview.id, m.preview.fp = "", ""
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	m.cancel, m.done = cancel, done

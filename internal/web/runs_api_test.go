@@ -131,6 +131,15 @@ func TestPreviewThenApply(t *testing.T) {
 		t.Fatalf("status after apply: %+v", st)
 	}
 
+	// the apply consumed the preview
+	if st.PreviewID != "" || st.PreviewFresh {
+		t.Fatalf("preview must be consumed by a live apply: %+v", st)
+	}
+	var e0 map[string]any
+	if code := doJSON(t, c, "POST", ts.URL+"/api/runs", map[string]any{"dry_run": false, "preview_id": previewID}, &e0); code != http.StatusConflict {
+		t.Fatalf("re-apply with consumed preview: %d", code)
+	}
+
 	// changing a file makes the old preview stale
 	upload(t, c, ts.URL+"/api/files", map[string]string{"app.conf": "v2"})
 	doJSON(t, c, "GET", ts.URL+"/api/runs/current", nil, &st)

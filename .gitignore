@@ -1,3 +1,8 @@
-dist/
+/dist/
 web/node_modules/
 *.test
+internal/web/dist/*
+!internal/web/dist/.keep
+ui/node_modules/
+ui/test-results/
+ui/playwright-report/

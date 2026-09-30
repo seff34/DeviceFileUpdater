@@ -98,7 +98,7 @@ func (r *iacReader) answer(cmd, opt byte) {
 var (
 	reLogin     = regexp.MustCompile(`(?i)(login|username|user name)\s*:\s*$`)
 	rePassOrSh  = regexp.MustCompile(`(?i)(password\s*:\s*$)|([#$>%]\s*$)`)
-	reAfterPass = regexp.MustCompile(`(?i)(incorrect|failed|denied|invalid)|(login\s*:\s*$)|([#$>%]\s*$)`)
+	reAfterPass = regexp.MustCompile(`(?i)(login incorrect|authentication fail\w*|access denied|login failed)|(login\s*:\s*$)|([#$>%]\s*$)`)
 )
 
 type telnetSession struct {

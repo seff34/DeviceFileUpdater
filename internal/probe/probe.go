@@ -73,33 +73,34 @@ func Probe(ctx context.Context, s transport.Session, ftpHost string, timeout tim
 		}
 	}
 
+	// Clamp timeout: if <= 0 or > 3s, use 3s
+	if timeout <= 0 || timeout > 3*time.Second {
+		timeout = 3 * time.Second
+	}
+
 	// Check SFTP with context and timeout
 	if cs, ok := s.(interface{ Client() *ssh.Client }); ok {
 		if cl := cs.Client(); cl != nil {
-			sftpDone := make(chan error, 1)
+			sftpOk := make(chan bool, 1)
 			go func() {
 				sc, err := sftp.NewClient(cl)
 				if err == nil {
-					c.SFTP = true
+					sftpOk <- true
 					sc.Close()
+				} else {
+					sftpOk <- false
 				}
-				sftpDone <- err
 			}()
 			// Wait for SFTP check, context done, or timeout
 			select {
-			case <-sftpDone:
-				// SFTP check completed
+			case ok := <-sftpOk:
+				c.SFTP = ok
 			case <-ctx.Done():
 				c.SFTP = false
 			case <-time.After(timeout):
 				c.SFTP = false
 			}
 		}
-	}
-
-	// Clamp timeout: if <= 0 or > 3s, use 3s
-	if timeout <= 0 || timeout > 3*time.Second {
-		timeout = 3 * time.Second
 	}
 
 	// Check FTP with context

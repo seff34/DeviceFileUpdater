@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"devupdater/internal/testutil"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func TestProbeParsesTools(t *testing.T) {
@@ -110,11 +112,24 @@ func TestProbeFTPWithListener(t *testing.T) {
 }
 
 func TestProbeFTPClosedPort(t *testing.T) {
-	// Use a port that's unlikely to be open; high port number
+	// Create a listener, get the port, close it so it's unavailable
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	addr := listener.Addr().(*net.TCPAddr)
+	port := fmt.Sprintf("%d", addr.Port)
+	listener.Close() // Close it so the port is no longer listening
+
+	// Save and restore ftpPort
+	originalPort := ftpPort
+	ftpPort = port
+	t.Cleanup(func() { ftpPort = originalPort })
+
 	s := &testutil.FakeSession{Handler: func(cmd string) (string, int) {
 		return "", 0
 	}}
-	c, err := Probe(context.Background(), s, "127.0.0.1", 100*time.Millisecond)
+	c, err := Probe(context.Background(), s, "127.0.0.1", 200*time.Millisecond)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,20 +210,30 @@ func (e *errorSession) Protocol() string { return "error" }
 
 func (e *errorSession) Close() error { return nil }
 
-// fakeSSHSession mimics SSHSession with Client() method
-type fakeSSHSession struct {
-	client *fakeSSHClient
+// nilClientSession has a Client() method that returns nil
+type nilClientSession struct{}
+
+func (n *nilClientSession) Exec(ctx context.Context, cmd string) (string, int, error) {
+	return "HAVE md5sum", 0, nil
 }
 
-func (f *fakeSSHSession) Exec(ctx context.Context, cmd string) (string, int, error) {
-	return "", 0, nil
+func (n *nilClientSession) Protocol() string { return "ssh" }
+
+func (n *nilClientSession) Close() error { return nil }
+
+func (n *nilClientSession) Client() *ssh.Client { return nil }
+
+func TestProbeNilClient(t *testing.T) {
+	// Test that nil Client() doesn't panic and SFTP=false
+	s := &nilClientSession{}
+	c, err := Probe(context.Background(), s, "127.0.0.1", 200*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.SFTP {
+		t.Fatalf("expected SFTP=false for nil client, got %+v", c)
+	}
+	if !c.Has("md5sum") {
+		t.Fatalf("should have parsed tools, got %+v", c)
+	}
 }
-
-func (f *fakeSSHSession) Protocol() string { return "ssh" }
-
-func (f *fakeSSHSession) Close() error { return nil }
-
-func (f *fakeSSHSession) Client() *fakeSSHClient { return f.client }
-
-// fakeSSHClient mimics ssh.Client but isn't one
-type fakeSSHClient struct{}

@@ -23,6 +23,9 @@ const usage = `usage:
   devupdater run [-workspace DIR] [-dry-run] [-parallel N] [-only-failed REPORT_ID]
 `
 
+// runJob is a seam so tests can substitute the runner.
+var runJob = runner.Run
+
 // Main runs the CLI and returns the process exit code:
 // 0 all devices ok, 1 some device failed, 2 usage or configuration error.
 func Main(args []string, stdout, stderr io.Writer) int {
@@ -50,6 +53,10 @@ func runCmd(args []string, stdout, stderr io.Writer) int {
 	parallel := fs.Int("parallel", 0, "devices at once (0 = settings.json)")
 	onlyFailed := fs.String("only-failed", "", "report ID whose failed devices to retry")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "error: unexpected argument %q\n%s", fs.Arg(0), usage)
 		return 2
 	}
 	ws := workspace.Workspace{Dir: *dir}
@@ -105,7 +112,7 @@ func runCmd(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	done := 0
-	res := runner.Run(ctx, runner.Job{
+	res := runJob(ctx, runner.Job{
 		Devices: devices, Files: files, Settings: settings,
 		DryRun: *dryRun, KnownHostsPath: ws.KnownHostsPath(),
 	}, func(e runner.Event) {

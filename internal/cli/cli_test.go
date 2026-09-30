@@ -2,11 +2,15 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"devupdater/internal/model"
+	"devupdater/internal/runner"
 	"devupdater/internal/workspace"
 )
 
@@ -94,5 +98,40 @@ func TestRunUnreachableWritesReportWithoutPassword(t *testing.T) {
 	}
 	if strings.Contains(out.String()+errb.String(), "SuperSecret123") {
 		t.Fatal("password leaked on retry")
+	}
+}
+
+func TestStrayPositionalArgsRejected(t *testing.T) {
+	dir := setupWS(t)
+	var out, errb bytes.Buffer
+	if code := Main([]string{"run", "-workspace", dir, "extra"}, &out, &errb); code != 2 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(errb.String(), "usage:") || !strings.Contains(errb.String(), "extra") {
+		t.Fatalf("stderr %q", errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "reports")); err == nil {
+		t.Fatal("run executed despite stray arg")
+	}
+}
+
+func TestSuccessfulRunExitsZero(t *testing.T) {
+	old := runJob
+	t.Cleanup(func() { runJob = old })
+	runJob = func(_ context.Context, job runner.Job, _ func(runner.Event)) model.RunResult {
+		r := model.RunResult{ID: "20260930-120000-abcd", Started: time.Now(), Finished: time.Now()}
+		for _, d := range job.Devices {
+			r.Devices = append(r.Devices, model.DeviceResult{Host: d.Host,
+				Files: []model.FileResult{{Remote: "/tmp/a.txt", Status: model.Created}}})
+		}
+		return r
+	}
+	dir := setupWS(t)
+	var out, errb bytes.Buffer
+	if code := Main([]string{"run", "-workspace", dir}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d stderr %s", code, errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "reports", "20260930-120000-abcd.json")); err != nil {
+		t.Fatal(err)
 	}
 }

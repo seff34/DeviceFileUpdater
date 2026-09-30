@@ -263,3 +263,22 @@ func TestFileResultEventsAndOrdering(t *testing.T) {
 		t.Fatalf("n=%d res=%+v", n, res.Devices[0])
 	}
 }
+
+func TestRunIDsUniqueWithinSameSecondAndSafe(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 50; i++ {
+		res := Run(context.Background(), Job{Settings: workspace.DefaultSettings()}, nil)
+		if seen[res.ID] {
+			t.Fatalf("duplicate id %s", res.ID)
+		}
+		seen[res.ID] = true
+		if strings.ContainsAny(res.ID, `/\`) || strings.Contains(res.ID, "..") || filepath.Base(res.ID) != res.ID {
+			t.Fatalf("unsafe id %q", res.ID)
+		}
+	}
+	a := newRunID(time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC))
+	b := newRunID(time.Date(2026, 9, 30, 12, 0, 1, 0, time.UTC))
+	if !(a[:15] < b[:15]) || len(a) != len("20060102-150405-abcd") {
+		t.Fatalf("ids %s %s", a, b)
+	}
+}

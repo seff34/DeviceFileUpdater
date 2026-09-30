@@ -3,6 +3,8 @@ package runner
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -79,6 +81,16 @@ type Event struct {
 
 const maxPostOutput = 2000
 
+// newRunID returns a chronologically sortable, path-safe ID: a second-resolution
+// timestamp plus 4 random hex chars so same-second runs never collide.
+func newRunID(t time.Time) string {
+	var b [2]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		b[0], b[1] = byte(t.Nanosecond()>>8), byte(t.Nanosecond())
+	}
+	return t.Format("20060102-150405") + "-" + hex.EncodeToString(b[:])
+}
+
 func Run(ctx context.Context, job Job, emit func(Event)) model.RunResult {
 	if job.Dial == nil {
 		job.Dial = transport.Dial
@@ -98,7 +110,7 @@ func Run(ctx context.Context, job Job, emit func(Event)) model.RunResult {
 
 	start := time.Now()
 	res := model.RunResult{
-		ID: start.Format("20060102-150405"), Started: start,
+		ID: newRunID(start), Started: start,
 		DryRun: job.DryRun, Parallel: job.Settings.Parallel,
 		Devices: make([]model.DeviceResult, len(job.Devices)),
 	}

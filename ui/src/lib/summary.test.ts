@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isCancelled, previewSentence, resultSentence, tally } from './summary'
+import { CANCELLED_TEXT, fileErrorText, isCancelled, previewSentence, resultSentence, tally } from './summary'
 import type { RunResult } from './types'
 
 const f = (remote: string, status: RunResult['devices'][0]['files'][0]['status']) => ({ remote, status, duration_ms: 1 })
@@ -46,6 +46,15 @@ describe('isCancelled', () => {
     expect(isCancelled({ error: 'connect: context canceled', files: [] })).toBe(true)
     expect(isCancelled({ error: 'x: operation was canceled', files: [] })).toBe(true)
     expect(isCancelled({ error: 'cancelled', files: [] })).toBe(true)
+  })
+  it('recognises the uniform engine shape (device and all files cancelled)', () => {
+    const d = { error: 'cancelled', files: [cf('FAILED', 'cancelled'), cf('FAILED', 'cancelled')] }
+    expect(isCancelled(d)).toBe(true)
+    expect(fileErrorText('cancelled')).toBe(CANCELLED_TEXT)
+    expect(CANCELLED_TEXT).toBe('İptal edildi')
+  })
+  it('keeps an earlier real file error visible next to the uniform cancel shape', () => {
+    expect(isCancelled({ error: 'cancelled', files: [cf('FAILED', 'check exists: permission denied'), cf('FAILED', 'cancelled')] })).toBe(false)
   })
   it('never hides a real failure', () => {
     expect(isCancelled({ files: [cf('FAILED', 'permission denied'), cf('FAILED', 'cancelled')] })).toBe(false)

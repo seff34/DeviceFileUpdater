@@ -199,6 +199,7 @@ func runDevice(ctx context.Context, job Job, d workspace.Device, send func(Event
 		switch {
 		case ctx.Err() != nil:
 			msg = "cancelled"
+			dr.Error = "cancelled"
 		case errors.Is(err, transport.ErrHostKey):
 			msg = "host key mismatch"
 		}
@@ -222,6 +223,7 @@ func runDevice(ctx context.Context, job Job, d workspace.Device, send func(Event
 		msg := "probe failed"
 		if ctx.Err() != nil {
 			msg = "cancelled"
+			dr.Error = "cancelled"
 		}
 		failAll(&dr, job.Files, 0, msg)
 		return
@@ -239,12 +241,16 @@ func runDevice(ctx context.Context, job Job, d workspace.Device, send func(Event
 	changed := false
 	for i, f := range job.Files {
 		if ctx.Err() != nil {
+			dr.Error = "cancelled"
 			failAll(&dr, job.Files, i, "cancelled")
 			break
 		}
 		state("syncing", i)
 		fr := dev.SyncFile(ctx, f, syncer.Options{DryRun: job.DryRun, Backup: st.Backup})
 		fr.Error = redact(fr.Error, d.Password)
+		if fr.Status == model.Failed && ctx.Err() != nil {
+			fr.Error = "cancelled" // in-flight file interrupted by cancel
+		}
 		dr.Files = append(dr.Files, fr)
 		changed = changed || fr.Status == model.Created || fr.Status == model.Updated
 		send(Event{Type: "file_result", Host: d.Host, Done: i + 1, Total: total, File: &fr})

@@ -4,6 +4,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -319,5 +320,95 @@ func TestProbeArgs(t *testing.T) {
 	}
 	if _, ok := hosts[""]; !ok {
 		t.Fatalf("explicit-port device must get empty ftp host: %v", hosts)
+	}
+}
+
+// cancelSession cancels the run the first time a command is executed.
+type cancelSession struct {
+	testutil.LocalShell
+	cancel context.CancelFunc
+}
+
+func (s cancelSession) Exec(ctx context.Context, cmd string) (string, int, error) {
+	s.cancel()
+	return s.LocalShell.Exec(ctx, cmd)
+}
+
+func assertUniformCancel(t *testing.T, res model.RunResult, nFiles int) {
+	t.Helper()
+	d := res.Devices[0]
+	if d.Error != "cancelled" {
+		t.Fatalf("device error = %q, want cancelled", d.Error)
+	}
+	if len(d.Files) != nFiles {
+		t.Fatalf("files = %d, want %d", len(d.Files), nFiles)
+	}
+	for _, f := range d.Files {
+		if f.Status != model.Failed || f.Error != "cancelled" {
+			t.Fatalf("file not cancelled: %+v", f)
+		}
+	}
+	if b, _ := json.Marshal(res); strings.Contains(string(b), "context canceled") {
+		t.Fatalf("raw context error leaked: %s", b)
+	}
+}
+
+func TestCancelDuringConnectIsUniform(t *testing.T) {
+	job := baseJob(t.TempDir())
+	job.DryRun = true
+	ctx, cancel := context.WithCancel(context.Background())
+	job.Dial = func(c context.Context, _ workspace.Device, _ transport.Options) (transport.Session, error) {
+		cancel()
+		return nil, c.Err()
+	}
+	job.Devices = []workspace.Device{{Host: "1"}}
+	assertUniformCancel(t, Run(ctx, job, nil), 1)
+}
+
+func TestCancelDuringProbeIsUniform(t *testing.T) {
+	job := baseJob(t.TempDir())
+	job.DryRun = true
+	ctx, cancel := context.WithCancel(context.Background())
+	job.Probe = func(c context.Context, _ transport.Session, _ string, _, _ time.Duration) (probe.Caps, error) {
+		cancel()
+		return probe.Caps{}, c.Err()
+	}
+	job.Devices = []workspace.Device{{Host: "1"}}
+	assertUniformCancel(t, Run(ctx, job, nil), 1)
+}
+
+func TestCancelMidLoopIsUniform(t *testing.T) {
+	dir := t.TempDir()
+	job := baseJob(dir)
+	job.DryRun = true
+	job.Files = append(job.Files, file(filepath.Join(dir, "b.txt"), "B"))
+	ctx, cancel := context.WithCancel(context.Background())
+	job.Dial = func(context.Context, workspace.Device, transport.Options) (transport.Session, error) {
+		return cancelSession{cancel: cancel}, nil
+	}
+	job.Devices = []workspace.Device{{Host: "1"}}
+	assertUniformCancel(t, Run(ctx, job, nil), 2)
+}
+
+// A real error that happened before the cancel stays visible.
+func TestCancelKeepsEarlierRealFileError(t *testing.T) {
+	dir := t.TempDir()
+	job := baseJob(dir)
+	job.DryRun = true
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	job.Files = []model.LocalFile{file(sub, "x"), file(filepath.Join(dir, "b.txt"), "B")}
+	ctx, cancel := context.WithCancel(context.Background())
+	job.Devices = []workspace.Device{{Host: "1"}}
+	res := Run(ctx, job, func(e Event) {
+		if e.Type == "file_result" {
+			cancel()
+		}
+	})
+	d := res.Devices[0]
+	if len(d.Files) != 2 || d.Files[0].Error == "cancelled" || d.Files[0].Error == "" || d.Files[1].Error != "cancelled" || d.Error != "cancelled" {
+		t.Fatalf("unexpected: %+v", d)
 	}
 }

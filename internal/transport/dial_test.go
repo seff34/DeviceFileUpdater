@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"devupdater/internal/testutil"
 	"devupdater/internal/workspace"
@@ -41,5 +42,107 @@ func TestDialAuthNotRetried(t *testing.T) {
 	_, err := Dial(context.Background(), workspace.Device{Host: addr, Username: "u", Password: "bad"}, testOpts())
 	if !errors.Is(err, ErrAuth) {
 		t.Fatalf("expected ErrAuth, got %v", err)
+	}
+}
+
+func TestConnectionErrorRetried(t *testing.T) {
+	// Mock dial functions that return connection errors.
+	// Verify each is called exactly 2 times (once per attempt).
+	var sshCalls, telnetCalls int
+	oldDialSSH := dialSSH
+	oldDialTelnet := dialTelnet
+	t.Cleanup(func() {
+		dialSSH = oldDialSSH
+		dialTelnet = oldDialTelnet
+	})
+
+	dialSSH = func(ctx context.Context, addr, user, pass string, opt Options) (Session, error) {
+		sshCalls++
+		return nil, errors.New("connection refused")
+	}
+	dialTelnet = func(ctx context.Context, addr, user, pass string, opt Options) (Session, error) {
+		telnetCalls++
+		return nil, errors.New("connection timeout")
+	}
+
+	_, err := Dial(context.Background(), workspace.Device{Host: "127.0.0.1:999", Username: "u", Password: "p"}, testOpts())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if sshCalls != 2 {
+		t.Fatalf("expected SSH called 2 times, got %d", sshCalls)
+	}
+	if telnetCalls != 2 {
+		t.Fatalf("expected Telnet called 2 times, got %d", telnetCalls)
+	}
+}
+
+func TestErrAuthOnceNotRetried(t *testing.T) {
+	// When SSH returns ErrAuth, Dial returns immediately without retrying.
+	var sshCalls, telnetCalls int
+	oldDialSSH := dialSSH
+	oldDialTelnet := dialTelnet
+	t.Cleanup(func() {
+		dialSSH = oldDialSSH
+		dialTelnet = oldDialTelnet
+	})
+
+	dialSSH = func(ctx context.Context, addr, user, pass string, opt Options) (Session, error) {
+		sshCalls++
+		return nil, ErrAuth
+	}
+	dialTelnet = func(ctx context.Context, addr, user, pass string, opt Options) (Session, error) {
+		telnetCalls++
+		return nil, errors.New("should not retry telnet after ErrAuth")
+	}
+
+	_, err := Dial(context.Background(), workspace.Device{Host: "127.0.0.1:999", Username: "u", Password: "p"}, testOpts())
+	if !errors.Is(err, ErrAuth) {
+		t.Fatalf("expected ErrAuth, got %v", err)
+	}
+	if sshCalls != 1 {
+		t.Fatalf("expected SSH called 1 time, got %d", sshCalls)
+	}
+	if telnetCalls != 1 {
+		t.Fatalf("expected Telnet called 1 time, got %d", telnetCalls)
+	}
+}
+
+func TestDialContextCancelledDuringRetry(t *testing.T) {
+	// Mock dial functions and cancel context during retry wait.
+	// Verify Dial returns context.Canceled error quickly.
+	var sshCalls int
+	oldDialSSH := dialSSH
+	oldRetryDelay := retryDelay
+	t.Cleanup(func() {
+		dialSSH = oldDialSSH
+		retryDelay = oldRetryDelay
+	})
+
+	dialSSH = func(ctx context.Context, addr, user, pass string, opt Options) (Session, error) {
+		sshCalls++
+		return nil, errors.New("connection error")
+	}
+
+	// Mock dialTelnet that should not be called on second attempt due to context cancellation
+	dialTelnet = func(ctx context.Context, addr, user, pass string, opt Options) (Session, error) {
+		return nil, errors.New("should not reach telnet on second attempt")
+	}
+
+	retryDelay = 10 * time.Second // Long delay to ensure we can cancel during wait
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel after first attempt but before retry wait completes
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := Dial(ctx, workspace.Device{Host: "127.0.0.1:999", Username: "u", Password: "p"}, testOpts())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if sshCalls != 1 {
+		t.Fatalf("expected SSH called 1 time, got %d", sshCalls)
 	}
 }

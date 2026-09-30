@@ -15,6 +15,17 @@ import (
 )
 
 var Tools = []string{"sha256sum", "md5sum", "base64", "od", "hexdump", "printf", "stat", "scp"}
+var ftpPort = "21"
+
+// toolMap is a set for fast lookups during parsing.
+var toolMap map[string]bool
+
+func init() {
+	toolMap = make(map[string]bool)
+	for _, t := range Tools {
+		toolMap[t] = true
+	}
+}
 
 type Caps struct {
 	Tools map[string]bool
@@ -50,22 +61,54 @@ func Probe(ctx context.Context, s transport.Session, ftpHost string, timeout tim
 		return c, err
 	}
 	for _, line := range strings.Split(out, "\n") {
-		if name, ok := strings.CutPrefix(strings.TrimSpace(line), "HAVE "); ok {
+		// Accept "HAVE <name>" after prompt noise (e.g. "~ # HAVE sha256sum")
+		idx := strings.Index(line, "HAVE ")
+		if idx == -1 {
+			continue
+		}
+		name := strings.TrimSpace(line[idx+5:])
+		// Only record if name is in Tools
+		if toolMap[name] {
 			c.Tools[name] = true
 		}
 	}
+
+	// Check SFTP with context and timeout
 	if cs, ok := s.(interface{ Client() *ssh.Client }); ok {
-		if sc, err := sftp.NewClient(cs.Client()); err == nil {
-			c.SFTP = true
-			sc.Close()
+		if cl := cs.Client(); cl != nil {
+			sftpDone := make(chan error, 1)
+			go func() {
+				sc, err := sftp.NewClient(cl)
+				if err == nil {
+					c.SFTP = true
+					sc.Close()
+				}
+				sftpDone <- err
+			}()
+			// Wait for SFTP check, context done, or timeout
+			select {
+			case <-sftpDone:
+				// SFTP check completed
+			case <-ctx.Done():
+				c.SFTP = false
+			case <-time.After(timeout):
+				c.SFTP = false
+			}
 		}
 	}
-	if timeout > 3*time.Second {
+
+	// Clamp timeout: if <= 0 or > 3s, use 3s
+	if timeout <= 0 || timeout > 3*time.Second {
 		timeout = 3 * time.Second
 	}
-	if conn, err := net.DialTimeout("tcp", net.JoinHostPort(ftpHost, "21"), timeout); err == nil {
+
+	// Check FTP with context
+	dialer := &net.Dialer{Timeout: timeout}
+	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(ftpHost, ftpPort))
+	if err == nil {
 		c.FTP = true
 		conn.Close()
 	}
+
 	return c, nil
 }

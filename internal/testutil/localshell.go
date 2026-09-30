@@ -22,6 +22,10 @@ func (LocalShell) Exec(ctx context.Context, cmd string) (string, int, error) {
 	if err != nil {
 		return s, -1, err
 	}
+	// Check if context was cancelled after command completed
+	if ctx.Err() != nil {
+		return s, -1, ctx.Err()
+	}
 	return s, 0, nil
 }
 

@@ -2,6 +2,7 @@ package shell
 
 import (
 	"context"
+	"errors"
 	"io"
 	"regexp"
 	"strings"
@@ -67,5 +68,51 @@ func TestExpect(t *testing.T) {
 	got, err := m.Expect(ctx(t), regexp.MustCompile(`login: $`))
 	if err != nil || !strings.HasSuffix(got, "login: ") {
 		t.Fatalf("got %q err %v", got, err)
+	}
+}
+
+// byteReader delivers one byte per Read, like a worst-case TCP split.
+type byteReader struct{ r io.Reader }
+
+func (b byteReader) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	return b.r.Read(p[:1])
+}
+
+func TestExecSplitNewlineAfterMarker(t *testing.T) {
+	cr, sw := io.Pipe()
+	sr, cw := io.Pipe()
+	go testutil.ServeFakeShell(sr, sw, false, func(cmd string) (string, int) {
+		if cmd == "a" {
+			return "A", 0
+		}
+		return "x", 0
+	})
+	t.Cleanup(func() { cw.Close(); sw.Close() })
+	m := NewMarkerSession(byteReader{cr}, cw, "\n")
+	for _, tc := range [][2]string{{"a", "A"}, {"printf x", "x"}, {"b", "x"}} {
+		out, code, err := m.Exec(ctx(t), tc[0])
+		if err != nil || code != 0 || out != tc[1] {
+			t.Fatalf("%s: out=%q code=%d err=%v", tc[0], out, code, err)
+		}
+	}
+}
+
+func TestExecStreamClosedMidCommand(t *testing.T) {
+	cr, sw := io.Pipe()
+	sr, cw := io.Pipe()
+	go testutil.ServeFakeShell(sr, sw, false, func(string) (string, int) {
+		sw.Close()
+		return "", 0
+	})
+	t.Cleanup(func() { cw.Close() })
+	m := NewMarkerSession(cr, cw, "\n")
+	if _, _, err := m.Exec(ctx(t), "x"); !errors.Is(err, io.EOF) {
+		t.Fatalf("want EOF, got %v", err)
+	}
+	if _, _, err := m.Exec(ctx(t), "y"); err == nil {
+		t.Fatal("expected error after closed stream")
 	}
 }

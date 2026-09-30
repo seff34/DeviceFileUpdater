@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -24,6 +23,8 @@ type MarkerSession struct {
 	readErr error
 	buf     []byte
 	broken  error
+	// pendingNL: the newline ending the last marker line had not arrived yet.
+	pendingNL bool
 }
 
 func NewMarkerSession(r io.Reader, w io.Writer, newline string) *MarkerSession {
@@ -63,6 +64,12 @@ func (m *MarkerSession) readMore(ctx context.Context) error {
 		}
 		b = bytes.ReplaceAll(b, []byte{'\r'}, nil)
 		b = bytes.ReplaceAll(b, []byte{0}, nil)
+		if m.pendingNL && len(b) > 0 {
+			m.pendingNL = false
+			if b[0] == '\n' {
+				b = b[1:]
+			}
+		}
 		m.buf = append(m.buf, b...)
 		return nil
 	case <-ctx.Done():
@@ -117,6 +124,8 @@ func (m *MarkerSession) Exec(ctx context.Context, cmd string) (string, int, erro
 			rest := m.buf[loc[1]:]
 			if len(rest) > 0 && rest[0] == '\n' {
 				rest = rest[1:]
+			} else if len(rest) == 0 {
+				m.pendingNL = true
 			}
 			m.buf = append([]byte(nil), rest...)
 			// Drop the echoed command line (and any prompt before it) if the tty echoed.
@@ -131,9 +140,7 @@ func (m *MarkerSession) Exec(ctx context.Context, cmd string) (string, int, erro
 			return string(bytes.TrimSuffix(out, []byte{'\n'})), code, nil
 		}
 		if err := m.readMore(ctx); err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				m.broken = err
-			}
+			m.broken = err
 			return string(m.buf), -1, err
 		}
 	}

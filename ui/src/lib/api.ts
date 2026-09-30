@@ -43,7 +43,6 @@ export const api = {
   fs: (path?: string) => request<FsListing>('GET', '/api/fs' + (path ? `?path=${encodeURIComponent(path)}` : '')),
   devices: () => request<{ devices: Device[] }>('GET', '/api/devices').then((r) => r.devices),
   saveDevices: (devices: Device[]) => request<{ devices: Device[] }>('PUT', '/api/devices', { devices }).then((r) => r.devices),
-  importDevices: (csv: string) => request<{ devices: Device[] }>('POST', '/api/devices/import', csv).then((r) => r.devices),
   manifest: () => request<{ entries: ManifestRow[] }>('GET', '/api/manifest').then((r) => r.entries),
   saveManifest: (entries: ManifestEntry[]) =>
     request<{ entries: ManifestRow[] }>('PUT', '/api/manifest', { entries }).then((r) => r.entries),

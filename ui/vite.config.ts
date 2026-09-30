@@ -20,7 +20,8 @@ export default defineConfig({
     },
   ],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
-  build: { outDir, emptyOutDir: true },
+  // The bundle is embedded in the binary and served from loopback; code-splitting buys nothing.
+  build: { outDir, emptyOutDir: true, chunkSizeWarningLimit: 800 },
   server: {
     // Dev: run `devupdater ui -port 8765 -no-browser -workspace <dir>`, open the
     // printed URL once (sets the cookie for 127.0.0.1), then use http://127.0.0.1:5173.

@@ -18,6 +18,9 @@ import (
 
 type FTPCreds struct{ Host, User, Pass string }
 
+// ftpPort is a var so tests can point the uploader at a local fake.
+var ftpPort = "21"
+
 type ftpUp struct {
 	s       transport.Session
 	cr      FTPCreds
@@ -73,7 +76,7 @@ func (u *ftpUp) Upload(ctx context.Context, data []byte, remote string) error {
 		return cs.add(c), nil
 	}
 	err := doCtx(ctx, cs.closeAll, func() error {
-		c, err := ftp.Dial(net.JoinHostPort(u.cr.Host, "21"),
+		c, err := ftp.Dial(net.JoinHostPort(u.cr.Host, ftpPort),
 			ftp.DialWithDialFunc(dial), ftp.DialWithTimeout(u.timeout))
 		if err != nil {
 			return err

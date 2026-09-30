@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"sync"
 
 	"devupdater/internal/shell"
 
@@ -19,36 +20,55 @@ func (u *scpUp) Name() string       { return "scp" }
 
 // Upload speaks the scp sink protocol against `scp -t <remote>`.
 func (u *scpUp) Upload(ctx context.Context, data []byte, remote string) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	var (
+		mu      sync.Mutex
+		sess    *ssh.Session
+		aborted bool
+	)
+	abort := func() {
+		mu.Lock()
+		defer mu.Unlock()
+		aborted = true
+		if sess != nil {
+			sess.Close()
+		} else {
+			u.c.Close() // a stalled channel open only unblocks when the client closes
+		}
 	}
-	sess, err := u.c.NewSession()
-	if err != nil {
-		return err
-	}
-	defer sess.Close()
-	stdin, err := sess.StdinPipe()
-	if err != nil {
-		return err
-	}
-	stdoutPipe, err := sess.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stdout := bufio.NewReader(stdoutPipe)
-	ack := func() error {
-		b, err := stdout.ReadByte()
+	return doCtx(ctx, abort, func() error {
+		s, err := u.c.NewSession()
 		if err != nil {
 			return err
 		}
-		if b != 0 {
-			msg, _ := stdout.ReadString('\n')
-			return fmt.Errorf("scp: %s", msg)
+		defer s.Close()
+		mu.Lock()
+		if aborted { // ctx ended while the channel was opening
+			mu.Unlock()
+			return ctx.Err()
 		}
-		return nil
-	}
-	return doCtx(ctx, func() { sess.Close() }, func() error {
-		if err := sess.Start("scp -t " + shell.Quote(remote)); err != nil {
+		sess = s
+		mu.Unlock()
+		stdin, err := s.StdinPipe()
+		if err != nil {
+			return err
+		}
+		stdoutPipe, err := s.StdoutPipe()
+		if err != nil {
+			return err
+		}
+		stdout := bufio.NewReader(stdoutPipe)
+		ack := func() error {
+			b, err := stdout.ReadByte()
+			if err != nil {
+				return err
+			}
+			if b != 0 {
+				msg, _ := stdout.ReadString('\n')
+				return fmt.Errorf("scp: %s", msg)
+			}
+			return nil
+		}
+		if err := s.Start("scp -t " + shell.Quote(remote)); err != nil {
 			return err
 		}
 		if err := ack(); err != nil {
@@ -73,6 +93,6 @@ func (u *scpUp) Upload(ctx context.Context, data []byte, remote string) error {
 			return err
 		}
 		io.Copy(io.Discard, stdout)
-		return sess.Wait()
+		return s.Wait()
 	})
 }

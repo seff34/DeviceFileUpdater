@@ -236,3 +236,41 @@ func TestNotesJoined(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+// stallUp blocks until its ctx ends, like a transfer to a wedged device.
+type stallUp struct{}
+
+func (stallUp) Name() string { return "sftp" }
+func (stallUp) Upload(ctx context.Context, _ []byte, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func TestStalledUploadTimesOut(t *testing.T) {
+	d := newDev(true)
+	d.CmdTimeout = 200 * time.Millisecond
+	d.Chain = upload.NewChain([]upload.Uploader{stallUp{}})
+	dst := filepath.Join(t.TempDir(), "f")
+	done := make(chan model.FileResult, 1)
+	go func() { done <- d.SyncFile(context.Background(), lf(dst, "x", ""), Options{}) }()
+	select {
+	case r := <-done:
+		if r.Status != model.Failed || !strings.Contains(r.Error, "upload") || !strings.Contains(r.Error, "timed out") {
+			t.Fatalf("%+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("SyncFile hung on a stalled upload")
+	}
+}
+
+func TestUploadTimeoutScalesWithSize(t *testing.T) {
+	if got := uploadTimeout(time.Second, 0); got != time.Second {
+		t.Fatalf("empty: %v", got)
+	}
+	if got := uploadTimeout(time.Second, 64<<10); got != 3*time.Second {
+		t.Fatalf("64 KiB: %v", got)
+	}
+	if got := uploadTimeout(0, 0); got != defaultCmdTimeout {
+		t.Fatalf("zero cmd timeout: %v", got)
+	}
+}

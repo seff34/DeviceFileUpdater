@@ -26,6 +26,20 @@ type Device struct {
 
 type Options struct{ DryRun, Backup bool }
 
+// minUploadRate (bytes/s) sizes the whole-upload deadline: cmdTimeout plus the
+// file size at this rate. 32 KiB/s is slow enough for the shell uploaders on
+// weak devices, yet a stalled sftp/scp/ftp transfer is abandoned instead of
+// hanging the device worker forever.
+const minUploadRate = 32 << 10
+
+// uploadTimeout is the deadline for uploading size bytes.
+func uploadTimeout(cmdTimeout time.Duration, size int) time.Duration {
+	if cmdTimeout <= 0 {
+		cmdTimeout = defaultCmdTimeout
+	}
+	return cmdTimeout + time.Duration(size)*time.Second/minUploadRate
+}
+
 func (d *Device) run(ctx context.Context, cmd string) error {
 	_, err := exec(ctx, d.S, d.CmdTimeout, cmd)
 	return err
@@ -109,10 +123,17 @@ func (d *Device) SyncFile(ctx context.Context, f model.LocalFile, opt Options) (
 	if d.Chain == nil {
 		return fail("upload", fmt.Errorf("no uploader configured"))
 	}
-	method, err := d.Chain.Upload(ctx, f.Data, tmpPath)
+	limit := uploadTimeout(d.CmdTimeout, len(f.Data))
+	uctx, cancel := context.WithTimeout(ctx, limit)
+	method, err := d.Chain.Upload(uctx, f.Data, tmpPath)
+	timedOut := uctx.Err() == context.DeadlineExceeded && ctx.Err() == nil
+	cancel()
 	res.Method = method
 	if err != nil {
 		cleanup()
+		if timedOut {
+			err = fmt.Errorf("timed out after %v: %w", limit, err)
+		}
 		return fail("upload", err)
 	}
 	if d.Hasher != nil {

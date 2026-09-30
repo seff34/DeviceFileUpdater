@@ -50,6 +50,7 @@ export function previewSentence(r: RunResult): string {
 
 export function resultSentence(r: RunResult): string {
   const t = tally(r)
+  if (t.devices === 0) return 'Hiçbir cihaz işlenmedi.'
   const ok = t.devices - t.failedDevices
   const head = t.failedDevices
     ? `${t.devices} cihazdan ${ok} tanesi başarılı, ${t.failedDevices} tanesi başarısız.`

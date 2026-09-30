@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PreviewStep } from './PreviewStep'
@@ -15,6 +16,8 @@ const report: RunResult = {
     { host: '10.0.0.2', duration_ms: 1, error: 'Cihaza ulaşılamadı: timeout', files: [{ remote: '/etc/app.conf', status: 'FAILED', duration_ms: 0 }] },
   ],
 }
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 let run: RunStatus
 let calls: Call[]
@@ -69,8 +72,7 @@ describe('PreviewStep', () => {
     const before = calls.filter((c) => c.url === '/api/runs/current' && c.method === 'GET').length
     await act(async () => {
       await Promise.resolve()
-      ES.last!.close()
-      ES.last!.onerror?.()
+      ES.last!.fail()
     })
     await waitFor(() => expect(calls.filter((c) => c.url === '/api/runs/current' && c.method === 'GET').length).toBeGreaterThan(before))
   })
@@ -94,6 +96,41 @@ describe('PreviewStep', () => {
     expect(await screen.findByText(/Önizlemeden sonra cihazlar, dosyalar veya ayarlar değişti/)).toBeInTheDocument()
     expect(screen.getByText('Önce güncel bir önizleme çalıştırın.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Önizlemeyi yeniden çalıştır' })).toBeEnabled()
+    expect(await screen.findByRole('checkbox', { name: /Değişiklikleri inceledim/ })).toBeDisabled()
+  })
+
+  it('warns when the last dry run was cancelled and an older preview is shown', async () => {
+    run = status({ state: 'done', dry_run: true, report_id: '', preview_id: report.id, preview_fresh: true })
+    setup()
+    renderWithProviders(<PreviewStep />, { path: '/preview' })
+    expect(await screen.findByText('Son önizleme tamamlanmadı; gösterilen sonuç önceki önizlemeye ait.')).toBeInTheDocument()
+  })
+
+  it('shows the run error when the last dry run failed', async () => {
+    run = status({ state: 'done', dry_run: true, report_id: '', preview_id: report.id, preview_fresh: true, error: 'Çalışma alanı kilitli' })
+    setup()
+    renderWithProviders(<PreviewStep />, { path: '/preview' })
+    expect(await screen.findByText('Çalışma alanı kilitli')).toBeInTheDocument()
+    expect(await screen.findByText(/Son önizleme tamamlanmadı/)).toBeInTheDocument()
+  })
+
+  it('handles a 409 on apply: toast, stale warning, checkbox reset and disabled', async () => {
+    run = status({ state: 'done', dry_run: true, report_id: report.id, preview_id: report.id, preview_fresh: true })
+    setup({
+      'POST /api/runs': () => {
+        run = { ...run, preview_fresh: false }
+        return new Response(JSON.stringify({ error: 'Önizleme güncel değil' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+      },
+    })
+    renderWithProviders(<PreviewStep />, { path: '/preview' })
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Değişiklikleri inceledim/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Uygulamayı başlat/ }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Önizleme güncel değil'))
+    expect(await screen.findByText(/Önizlemeden sonra cihazlar, dosyalar veya ayarlar değişti/)).toBeInTheDocument()
+    const box = screen.getByRole('checkbox', { name: /Değişiklikleri inceledim/ })
+    expect(box).toBeDisabled()
+    expect(box).not.toBeChecked()
+    expect(window.location.pathname).toBe('/preview')
   })
 
   it('keeps the start button disabled and explains when devices fail to load', async () => {

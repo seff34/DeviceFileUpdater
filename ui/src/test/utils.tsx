@@ -58,6 +58,8 @@ export function renderWithProviders(ui: ReactElement, { path = '/' }: { path?: s
 
 /** Stand-in for EventSource. `setup.ts` unstubs globals after every test. */
 export class FakeEventSource {
+  static CONNECTING = 0
+  static OPEN = 1
   static CLOSED = 2
   static last: FakeEventSource | null = null
   readyState = 1
@@ -73,6 +75,11 @@ export class FakeEventSource {
   }
   close() {
     this.readyState = FakeEventSource.CLOSED
+  }
+  /** Simulates the browser giving up on the connection (for example a 401). */
+  fail() {
+    this.readyState = FakeEventSource.CLOSED
+    this.onerror?.()
   }
 }
 

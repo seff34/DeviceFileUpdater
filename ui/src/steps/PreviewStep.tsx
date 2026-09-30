@@ -24,6 +24,13 @@ const FILTERS: { id: MatrixFilter; label: string }[] = [
   { id: 'failed', label: 'Hatalı' },
 ]
 
+function confirmText(t: ReturnType<typeof tally>): string {
+  const head = t.changedDevices
+    ? `Değişiklikleri inceledim. ${t.changedDevices} cihazda toplam ${t.filesCreate + t.filesUpdate} dosya yazılacak`
+    : 'Değişiklikleri inceledim. Hiçbir cihaza dosya yazılmayacak'
+  return t.unreachable ? `${head}; ulaşılamayan ${t.unreachable} cihaz raporda başarısız görünecek.` : `${head}.`
+}
+
 export function PreviewStep() {
   const qc = useQueryClient()
   const { facts, previewConfirmed, setPreviewConfirmed } = useWizard()
@@ -33,10 +40,17 @@ export function PreviewStep() {
   const [filter, setFilter] = useState<MatrixFilter>('all')
 
   const previewRunning = run?.state === 'running' && run.dry_run
-  const live = useRunEvents(previewRunning, hosts)
+  const live = useRunEvents(previewRunning && devices.isSuccess, hosts)
   const previewId = !previewRunning ? run?.preview_id || null : null
   const report = useQuery({ queryKey: ['report', previewId], queryFn: () => api.report(previewId!), enabled: !!previewId })
   const fresh = !!run?.preview_fresh
+
+  // A new preview starts from the unfiltered view (render-time adjust, not an effect).
+  const [seenPreview, setSeenPreview] = useState(previewId)
+  if (seenPreview !== previewId) {
+    setSeenPreview(previewId)
+    setFilter('all')
+  }
 
   const start = useMutation({
     mutationFn: () => api.startRun({ dry_run: true }),
@@ -60,6 +74,8 @@ export function PreviewStep() {
   const gate = devices.isPending ? 'Cihazlar yükleniyor.' : !ready ? 'Cihazlar yüklenemedi.' : blocker('preview', facts)
   const t = report.data ? tally(report.data) : null
   const cancelledPreview = run?.state === 'done' && run.dry_run && !run.preview_id
+  // The last dry run failed or was cancelled, so the matrix below is an older preview.
+  const lastRunIncomplete = run?.state === 'done' && run.dry_run && !!run.preview_id && (!!run.error || run.report_id !== run.preview_id)
 
   return (
     <StepPage
@@ -84,6 +100,9 @@ export function PreviewStep() {
         )
       }
     >
+      {run?.error && (
+        <Alert variant="destructive" className="mb-4"><AlertDescription>{run.error}</AlertDescription></Alert>
+      )}
       {devices.isPending ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10" />)}</div>
       ) : !ready ? (
@@ -107,6 +126,12 @@ export function PreviewStep() {
         <Alert variant="destructive"><AlertDescription>{(report.error as Error).message}</AlertDescription></Alert>
       ) : (
         <div className="grid gap-4">
+          {lastRunIncomplete && (
+            <Alert className="border-warn/30 bg-warn/5">
+              <WarningCircle className="text-warn" aria-hidden />
+              <AlertDescription className="text-foreground">Son önizleme tamamlanmadı; gösterilen sonuç önceki önizlemeye ait.</AlertDescription>
+            </Alert>
+          )}
           {!fresh && (
             <Alert className="border-warn/30 bg-warn/5">
               <WarningCircle className="text-warn" aria-hidden />
@@ -137,7 +162,7 @@ export function PreviewStep() {
           <div className={cn('flex items-start gap-3 rounded-md border bg-card p-4', !fresh && 'opacity-60')}>
             <Checkbox id="preview-ok" checked={previewConfirmed} disabled={!fresh} onCheckedChange={(v) => setPreviewConfirmed(v === true)} className="mt-0.5" />
             <Label htmlFor="preview-ok" className="text-sm leading-relaxed font-normal">
-              Değişiklikleri inceledim. {t!.changedDevices} cihazda toplam {t!.filesCreate + t!.filesUpdate} dosya yazılacak; ulaşılamayan cihazlar raporda başarısız görünecek.
+              {confirmText(t!)}
             </Label>
           </div>
         </div>

@@ -34,4 +34,7 @@ describe('summary', () => {
     }
     expect(resultSentence(done)).toBe('2 cihazdan 1 tanesi başarılı, 1 tanesi başarısız. 1 dosya oluşturuldu, 1 dosya güncellendi, 1 dosya aynıydı, 1 dosya başarısız.')
   })
+  it('does not claim success for a report with no devices', () => {
+    expect(resultSentence({ ...preview, dry_run: false, devices: [] })).toBe('Hiçbir cihaz işlenmedi.')
+  })
 })

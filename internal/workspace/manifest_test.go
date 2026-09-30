@@ -56,3 +56,17 @@ func TestReadFiles(t *testing.T) {
 		t.Fatal("expected missing file error")
 	}
 }
+
+func TestLoadManifestWithBOM(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "manifest.csv")
+	// Write file with UTF-8 BOM prefix
+	os.WriteFile(p, []byte("\xef\xbb\xbflocal_path,remote_path,mode\nfiles/a.txt,/tmp/a.txt,644\n"), 0o644)
+	es, err := LoadManifest(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(es) != 1 || es[0].LocalPath != "files/a.txt" {
+		t.Fatalf("got %+v", es)
+	}
+}

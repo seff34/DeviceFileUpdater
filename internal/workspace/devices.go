@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -44,6 +45,8 @@ func ParseDevices(r io.Reader) ([]Device, error) {
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("devices.csv: empty file")
 	}
+	// Strip BOM from first header cell if present
+	rows[0][0] = strings.TrimPrefix(rows[0][0], "\xef\xbb\xbf")
 	for i, h := range deviceHeader {
 		if strings.ToLower(strings.TrimSpace(rows[0][i])) != h {
 			return nil, fmt.Errorf("devices.csv: header must be %s", strings.Join(deviceHeader, ","))
@@ -76,8 +79,16 @@ func LoadDevices(path string) ([]Device, error) {
 }
 
 func SaveDevices(path string, ds []Device) error {
-	f, err := os.Create(path)
+	// Write to temp file in same directory for atomic replace
+	dir := filepath.Dir(path)
+	f, err := os.CreateTemp(dir, ".devices*.csv")
 	if err != nil {
+		return err
+	}
+	// Set permissions to 0600 (owner read/write only) before writing
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
+		os.Remove(f.Name())
 		return err
 	}
 	w := csv.NewWriter(f)
@@ -88,7 +99,13 @@ func SaveDevices(path string, ds []Device) error {
 	w.Flush()
 	if err := w.Error(); err != nil {
 		f.Close()
+		os.Remove(f.Name())
 		return err
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+	// Atomic rename
+	return os.Rename(f.Name(), path)
 }

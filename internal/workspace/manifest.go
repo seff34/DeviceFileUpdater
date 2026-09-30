@@ -37,6 +37,8 @@ func LoadManifest(path string) ([]Entry, error) {
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("manifest.csv: empty file")
 	}
+	// Strip BOM from first header cell if present
+	rows[0][0] = strings.TrimPrefix(rows[0][0], "\xef\xbb\xbf")
 	for i, h := range manifestHeader {
 		if strings.ToLower(strings.TrimSpace(rows[0][i])) != h {
 			return nil, fmt.Errorf("manifest.csv: header must be %s", strings.Join(manifestHeader, ","))

@@ -1,5 +1,5 @@
 import { ArrowClockwise, ArrowSquareOut, CaretRight, CheckCircle, DownloadSimple, XCircle } from '@phosphor-icons/react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fragment, memo, useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -9,7 +9,7 @@ import { api, ApiError, reportHtmlUrl } from '@/lib/api'
 import { formatDateTime, formatDuration } from '@/lib/format'
 import { navigate } from '@/lib/router'
 import { deviceFailed } from '@/lib/status'
-import { CANCELLED_TEXT, fileErrorText, isCancelled, resultSentence, tally } from '@/lib/summary'
+import { CANCELLED_TEXT, fileErrorText, hasRealError, isCancelled, resultSentence, tally } from '@/lib/summary'
 import type { DeviceResult, RunResult } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useWizard } from '@/wizard/WizardContext'
@@ -25,13 +25,16 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
   )
 }
 
+// The server's messages are already Turkish and say which cause applies (409 and 422 have several).
 function retryMessage(e: unknown): string {
+  const msg = (e as Error).message
+  if (msg) return msg
   if (e instanceof ApiError) {
     if (e.status === 409) return 'Şu anda çalışan bir işlem var. Bitmesini bekleyip tekrar deneyin.'
     if (e.status === 422) return 'Tekrar denenecek başarısız cihaz yok.'
     if (e.status === 404) return 'Rapor bulunamadı.'
   }
-  return (e as Error).message
+  return 'Tekrar deneme başlatılamadı.'
 }
 
 const DeviceRow = memo(function DeviceRow({ d, expanded, onToggle }: { d: DeviceResult; expanded: boolean; onToggle: (host: string) => void }) {
@@ -51,7 +54,7 @@ const DeviceRow = memo(function DeviceRow({ d, expanded, onToggle }: { d: Device
             {failed ? <XCircle size={16} weight="bold" aria-hidden /> : <CheckCircle size={16} weight="bold" aria-hidden />}
             {cancelled ? CANCELLED_TEXT : failed ? 'Başarısız' : 'Başarılı'}
           </span>
-          {d.error && !cancelled && <p className="mt-0.5 max-w-80 truncate text-xs text-fail" title={d.error}>{d.error}</p>}
+          {hasRealError(d) && <p className="mt-0.5 max-w-80 truncate text-xs text-fail" title={d.error}>{d.error}</p>}
         </td>
         <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{[d.protocol, d.upload_method, d.hash_method].filter(Boolean).join(' · ') || '-'}</td>
         <td className="px-3 py-2 tabular-nums text-muted-foreground">{formatDuration(d.duration_ms)}</td>
@@ -103,11 +106,13 @@ export function ReportView({ result, reportId, allowRetry }: { result: RunResult
   const [onlyFailed, setOnlyFailed] = useState(false)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [confirmRetry, setConfirmRetry] = useState(false)
+  const devices = useQuery({ queryKey: ['devices'], queryFn: api.devices, enabled: confirmRetry })
   const busy = facts.run?.state === 'running'
   const retry = useMutation({
     mutationFn: () => api.startRun({ dry_run: false, only_failed_from: reportId }),
     onSuccess: (st) => {
       qc.setQueryData(['run'], st)
+      if (st.total_devices) toast(`${st.total_devices} cihazda tekrar deneme başladı.`)
       navigate('/apply')
     },
     onError: (e) => toast.error(retryMessage(e)),
@@ -115,7 +120,13 @@ export function ReportView({ result, reportId, allowRetry }: { result: RunResult
   const rows = useMemo(() => result.devices.filter((d) => !onlyFailed || deviceFailed(d)), [result, onlyFailed])
   const toggle = useCallback((h: string) => setOpen((s) => { const x = new Set(s); if (x.has(h)) x.delete(h); else x.add(h); return x }), [])
   const elapsed = result.started && result.finished ? new Date(result.finished).getTime() - new Date(result.started).getTime() : 0
-  const shown = failedHosts.slice(0, RETRY_LIST_MAX)
+  // Only failed hosts still in devices.csv are retried by the server.
+  const current = useMemo(() => new Set((devices.data ?? []).map((d) => d.host)), [devices.data])
+  const retryHosts = failedHosts.filter((h) => current.has(h))
+  const skipped = failedHosts.length - retryHosts.length
+  const loading = devices.isPending
+  const shown = retryHosts.slice(0, RETRY_LIST_MAX)
+  const confirmBlock = loading ? 'Cihaz listesi yükleniyor.' : devices.isError ? 'Cihaz listesi okunamadı.' : retryHosts.length === 0 ? 'Başarısız cihazların hiçbiri artık devices.csv içinde değil.' : undefined
 
   return (
     <div className="grid gap-6">
@@ -193,12 +204,18 @@ export function ReportView({ result, reportId, allowRetry }: { result: RunResult
         onOpenChange={setConfirmRetry}
         title="Başarısız cihazlar tekrar denensin mi?"
         description={
-          <>
-            Bu işlem önizlemesiz, doğrudan cihazlara yazar. Güncel dosya listesi ve ayarlarla yalnızca {failedHosts.length} cihazda yeni bir uygulama başlatılır: <span className="font-mono">{shown.join(', ')}</span>
-            {failedHosts.length > shown.length && <> ve {failedHosts.length - shown.length} cihaz daha</>}. Listeden çıkarılmış cihazlar atlanır.
-          </>
+          confirmBlock ? (
+            <>{confirmBlock}</>
+          ) : (
+            <>
+              Bu işlem önizlemesiz, doğrudan cihazlara yazar. Yalnızca {retryHosts.length} cihazda yeni bir uygulama başlatılır: <span className="font-mono">{shown.join(', ')}</span>
+              {retryHosts.length > shown.length && <> ve {retryHosts.length - shown.length} cihaz daha</>}.
+              {skipped > 0 && <> {skipped} cihaz artık devices.csv'de olmadığı için atlanacak.</>} Tekrar deneme, bu rapordakinden farklı olabilecek güncel dosya listesini ve ayarları kullanır.
+            </>
+          )
         }
         confirmLabel="Tekrar dene"
+        confirmDisabled={!!confirmBlock}
         onConfirm={() => retry.mutate()}
       />
     </div>

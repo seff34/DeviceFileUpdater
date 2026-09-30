@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { previewSentence, resultSentence, tally } from './summary'
+import { isCancelled, previewSentence, resultSentence, tally } from './summary'
 import type { RunResult } from './types'
 
 const f = (remote: string, status: RunResult['devices'][0]['files'][0]['status']) => ({ remote, status, duration_ms: 1 })
@@ -36,5 +36,20 @@ describe('summary', () => {
   })
   it('does not claim success for a report with no devices', () => {
     expect(resultSentence({ ...preview, dry_run: false, devices: [] })).toBe('Hiçbir cihaz işlenmedi.')
+  })
+})
+
+describe('isCancelled', () => {
+  const cf = (status: 'FAILED' | 'UPDATED', error?: string) => ({ status, error })
+  it('recognises every cancel shape', () => {
+    expect(isCancelled({ files: [cf('FAILED', 'cancelled')] })).toBe(true)
+    expect(isCancelled({ error: 'connect: context canceled', files: [] })).toBe(true)
+    expect(isCancelled({ error: 'x: operation was canceled', files: [] })).toBe(true)
+    expect(isCancelled({ error: 'cancelled', files: [] })).toBe(true)
+  })
+  it('never hides a real failure', () => {
+    expect(isCancelled({ files: [cf('FAILED', 'permission denied'), cf('FAILED', 'cancelled')] })).toBe(false)
+    expect(isCancelled({ error: 'auth failed', files: [cf('FAILED', 'cancelled')] })).toBe(false)
+    expect(isCancelled({ files: [cf('UPDATED')] })).toBe(false)
   })
 })

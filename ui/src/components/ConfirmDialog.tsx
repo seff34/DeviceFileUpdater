@@ -9,10 +9,11 @@ interface Props {
   description: ReactNode
   confirmLabel: string
   destructive?: boolean
+  confirmDisabled?: boolean
   onConfirm: () => void
 }
 
-export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, destructive, onConfirm }: Props) {
+export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, destructive, confirmDisabled, onConfirm }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -24,6 +25,7 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
           <Button variant="outline" onClick={() => onOpenChange(false)}>Vazgeç</Button>
           <Button
             variant={destructive ? 'destructive' : 'default'}
+            disabled={confirmDisabled}
             onClick={() => {
               onConfirm()
               onOpenChange(false)

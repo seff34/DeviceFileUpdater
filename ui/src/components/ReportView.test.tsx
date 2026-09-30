@@ -22,6 +22,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   calls = mockApi({
     '/api/workspace': { current: '/srv/ws', recent: [] },
+    '/api/devices': { devices: [{ host: '10.0.0.1', username: 'u', password: '' }, { host: '10.0.0.2', username: 'u', password: '' }] },
     '/api/runs/current': { state: 'done', dry_run: false },
     'POST /api/runs': { state: 'running', dry_run: false, only_failed_from: result.id, total_devices: 1 },
   })
@@ -75,26 +76,98 @@ describe('ReportView', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/apply'))
   })
   it.each([
-    [409, /çalışan bir işlem/],
-    [422, /başarısız cihaz yok/],
-    [404, /Rapor bulunamadı/],
-  ])('toasts a Turkish message for %i and stays on the page', async (status, msg) => {
+    [409, 'Başka bir çalışma alanında işlem sürüyor.'],
+    [422, 'Cihaz listesi geçersiz: satır 3.'],
+    [422, 'Bu raporda başarısız cihaz yok.'],
+    [404, 'Rapor bulunamadı: x'],
+  ])('toasts the server message for %i and stays on the page', async (status, msg) => {
     mockApi({
       '/api/workspace': { current: '/srv/ws', recent: [] },
+      '/api/devices': { devices: [{ host: '10.0.0.2', username: 'u', password: '' }] },
       '/api/runs/current': { state: 'done', dry_run: false },
-      'POST /api/runs': () => json({ error: 'server english' }, status),
+      'POST /api/runs': () => json({ error: msg }, status),
     })
     renderWithProviders(<ReportView result={result} reportId={result.id} allowRetry />, { path: '/report' })
     await userEvent.click(screen.getByRole('button', { name: /Başarısızları tekrar dene/ }))
-    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Tekrar dene' }))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(msg)))
+    await userEvent.click(await within(await screen.findByRole('dialog')).findByRole('button', { name: 'Tekrar dene' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(msg))
     expect(window.location.pathname).toBe('/report')
     expect(screen.getByRole('button', { name: /Başarısızları tekrar dene/ })).toBeEnabled()
+  })
+  it('falls back to Turkish text when the error message is empty', async () => {
+    mockApi({
+      '/api/workspace': { current: '/srv/ws', recent: [] },
+      '/api/devices': { devices: [{ host: '10.0.0.2', username: 'u', password: '' }] },
+      '/api/runs/current': { state: 'done', dry_run: false },
+      'POST /api/runs': () => json({ error: '' }, 409),
+    })
+    renderWithProviders(<ReportView result={result} reportId={result.id} allowRetry />, { path: '/report' })
+    await userEvent.click(screen.getByRole('button', { name: /Başarısızları tekrar dene/ }))
+    await userEvent.click(await within(await screen.findByRole('dialog')).findByRole('button', { name: 'Tekrar dene' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/çalışan bir işlem/)))
+  })
+  it('counts only failed hosts still in devices.csv and says how many are skipped', async () => {
+    const r: RunResult = { ...result, devices: [...result.devices, { host: '10.0.0.3', duration_ms: 1, error: 'timeout', files: [] }] }
+    mockApi({
+      '/api/workspace': { current: '/srv/ws', recent: [] },
+      '/api/devices': { devices: [{ host: '10.0.0.2', username: 'u', password: '' }] },
+      '/api/runs/current': { state: 'done', dry_run: false },
+    })
+    renderWithProviders(<ReportView result={r} reportId={r.id} allowRetry />, { path: '/report' })
+    await userEvent.click(screen.getByRole('button', { name: /Başarısızları tekrar dene/ }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/Yalnızca 1 cihazda/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/1 cihaz artık devices\.csv'de olmadığı için atlanacak/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/güncel dosya listesini ve ayarları/)).toBeInTheDocument()
+  })
+  it('disables confirm when no failed host remains in devices.csv', async () => {
+    mockApi({
+      '/api/workspace': { current: '/srv/ws', recent: [] },
+      '/api/devices': { devices: [{ host: '10.0.0.1', username: 'u', password: '' }] },
+      '/api/runs/current': { state: 'done', dry_run: false },
+    })
+    renderWithProviders(<ReportView result={result} reportId={result.id} allowRetry />, { path: '/report' })
+    await userEvent.click(screen.getByRole('button', { name: /Başarısızları tekrar dene/ }))
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/hiçbiri artık devices\.csv içinde değil/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Tekrar dene' })).toBeDisabled()
+  })
+  it('keeps confirm disabled while devices load', async () => {
+    mockApi({
+      '/api/workspace': { current: '/srv/ws', recent: [] },
+      '/api/devices': () => new Promise(() => {}),
+      '/api/runs/current': { state: 'done', dry_run: false },
+    })
+    renderWithProviders(<ReportView result={result} reportId={result.id} allowRetry />, { path: '/report' })
+    await userEvent.click(screen.getByRole('button', { name: /Başarısızları tekrar dene/ }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Cihaz listesi yükleniyor.')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Tekrar dene' })).toBeDisabled()
+  })
+  it('surfaces the real error when a device has mixed real and cancelled failures', async () => {
+    const r: RunResult = {
+      ...result,
+      devices: [{ host: '10.0.0.8', duration_ms: 1, files: [
+        { remote: '/etc/a.conf', status: 'FAILED', duration_ms: 0, error: 'permission denied' },
+        { remote: '/etc/b.conf', status: 'FAILED', duration_ms: 0, error: 'cancelled' },
+      ] }],
+    }
+    renderWithProviders(<ReportView result={r} reportId={r.id} allowRetry />)
+    expect(screen.queryByText('İptal edildi')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /10\.0\.0\.8/ }))
+    expect(screen.getByText('permission denied')).toBeInTheDocument()
+  })
+  it('keeps a real device error visible even when files were cancelled', () => {
+    const r: RunResult = { ...result, devices: [{ host: '10.0.0.9', duration_ms: 1, error: 'auth failed', files: [{ remote: '/a', status: 'FAILED', duration_ms: 0, error: 'cancelled' }] }] }
+    renderWithProviders(<ReportView result={r} reportId={r.id} allowRetry />)
+    expect(screen.getByText('auth failed')).toBeInTheDocument()
+    expect(screen.queryByText('İptal edildi')).not.toBeInTheDocument()
   })
   it('disables retry while the request is in flight', async () => {
     let release!: () => void
     mockApi({
       '/api/workspace': { current: '/srv/ws', recent: [] },
+      '/api/devices': { devices: [{ host: '10.0.0.1', username: 'u', password: '' }, { host: '10.0.0.2', username: 'u', password: '' }] },
       '/api/runs/current': { state: 'done', dry_run: false },
       'POST /api/runs': () => new Promise((res) => { release = () => res({ state: 'running', dry_run: false, only_failed_from: result.id }) }),
     })

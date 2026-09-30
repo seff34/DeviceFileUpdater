@@ -73,15 +73,21 @@ export function filterDevices(r: RunResult, filter: MatrixFilter) {
   return r.devices.filter((d) => (filter === 'all' ? true : filter === 'failed' ? deviceFailed(d) : changes(d)))
 }
 
+const cancelShape = (e: string) => e === 'cancelled' || e.endsWith('context canceled') || e.endsWith('operation was canceled')
+
+/** True when d.error is a real (non-cancellation) device error. */
+export const hasRealError = (d: { error?: string }): boolean => !!d.error && !cancelShape(d.error)
 
 /**
  * The engine reports a device cancelled mid-flight in several shapes: a file error "cancelled"
  * with an empty device error, or a device error ending in "context canceled" / "operation was canceled".
+ * A device counts as cancelled only when nothing real failed: every failed file is cancelled and the
+ * device error is empty or a cancel shape. Otherwise the real error must stay visible.
  */
-export function isCancelled(d: { error?: string; files: { error?: string }[] }): boolean {
-  if (d.files.some((f) => f.error === 'cancelled')) return true
-  const e = d.error
-  return !!e && (e === 'cancelled' || e.endsWith('context canceled') || e.endsWith('operation was canceled'))
+export function isCancelled(d: { error?: string; files: { status?: string; error?: string }[] }): boolean {
+  if (hasRealError(d)) return false
+  if (d.files.some((f) => f.status === 'FAILED' && f.error && f.error !== 'cancelled')) return false
+  return !!d.error || d.files.some((f) => f.error === 'cancelled')
 }
 
 export const CANCELLED_TEXT = 'İptal edildi'

@@ -139,6 +139,22 @@ describe('ApplyStep', () => {
     expect(screen.queryByText(/cancel(l)?ed$/)).not.toBeInTheDocument()
   })
 
+  it('shows the real file error when a device has mixed real and cancelled failures', async () => {
+    const ES = installFakeEventSource()
+    renderWithProviders(<ApplyStep />, { path: '/apply' })
+    await waitFor(() => expect(ES.last).not.toBeNull())
+    await act(async () => {
+      await Promise.resolve()
+      ES.last!.emit({ type: 'device_state', host: '10.0.0.1', stage: 'syncing', done: 0, total: 2 })
+      ES.last!.emit({ type: 'file_result', host: '10.0.0.1', done: 1, total: 2, file: { remote: '/etc/a', status: 'FAILED', error: 'permission denied', duration_ms: 0 } })
+      ES.last!.emit({ type: 'file_result', host: '10.0.0.1', done: 2, total: 2, file: { remote: '/etc/b', status: 'FAILED', error: 'cancelled', duration_ms: 0 } })
+      await new Promise((r) => requestAnimationFrame(() => r(null)))
+    })
+    const row = screen.getByRole('row', { name: /10\.0\.0\.1/ })
+    expect(within(row).getByText(/permission denied/)).toBeInTheDocument()
+    expect(within(row).queryByText('İptal edildi')).not.toBeInTheDocument()
+  })
+
   it('shows cancelled devices as cancelled and filters failed rows', async () => {
     const ES = installFakeEventSource()
     renderWithProviders(<ApplyStep />, { path: '/apply' })

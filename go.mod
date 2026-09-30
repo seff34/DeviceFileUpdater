@@ -2,6 +2,8 @@ module devupdater
 
 go 1.26.0
 
+ignore ./ui/node_modules
+
 require (
 	github.com/jlaffaye/ftp v0.2.4
 	github.com/pkg/sftp v1.13.11

@@ -52,11 +52,22 @@ func (c Caps) List() []string {
 	return out
 }
 
-func Probe(ctx context.Context, s transport.Session, ftpHost string, timeout time.Duration) (Caps, error) {
+// defaultCmdTimeout applies when a caller passes a zero or negative cmdTimeout.
+const defaultCmdTimeout = 30 * time.Second
+
+// Probe lists the device's tools (the shell command is bounded by cmdTimeout)
+// and checks SFTP and FTP (each bounded by timeout, clamped to 3s). An empty
+// ftpHost skips FTP detection.
+func Probe(ctx context.Context, s transport.Session, ftpHost string, timeout, cmdTimeout time.Duration) (Caps, error) {
 	c := Caps{Tools: map[string]bool{}}
 	cmd := "for c in " + strings.Join(Tools, " ") +
 		"; do (command -v $c || which $c || type $c) >/dev/null 2>&1 && echo \"HAVE $c\"; done; true"
-	out, _, err := s.Exec(ctx, cmd)
+	if cmdTimeout <= 0 {
+		cmdTimeout = defaultCmdTimeout
+	}
+	cctx, cancel := context.WithTimeout(ctx, cmdTimeout)
+	out, _, err := s.Exec(cctx, cmd)
+	cancel()
 	if err != nil {
 		return c, err
 	}
@@ -104,11 +115,13 @@ func Probe(ctx context.Context, s transport.Session, ftpHost string, timeout tim
 	}
 
 	// Check FTP with context
-	dialer := &net.Dialer{Timeout: timeout}
-	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(ftpHost, ftpPort))
-	if err == nil {
-		c.FTP = true
-		conn.Close()
+	if ftpHost != "" {
+		dialer := &net.Dialer{Timeout: timeout}
+		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(ftpHost, ftpPort))
+		if err == nil {
+			c.FTP = true
+			conn.Close()
+		}
 	}
 
 	return c, nil

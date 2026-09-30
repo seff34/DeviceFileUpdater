@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -56,7 +57,7 @@ func truncate(s string, n int) string {
 }
 
 type DialFunc func(ctx context.Context, d workspace.Device, opt transport.Options) (transport.Session, error)
-type ProbeFunc func(ctx context.Context, s transport.Session, host string, timeout time.Duration) (probe.Caps, error)
+type ProbeFunc func(ctx context.Context, s transport.Session, ftpHost string, timeout, cmdTimeout time.Duration) (probe.Caps, error)
 
 type Job struct {
 	Devices        []workspace.Device
@@ -208,7 +209,14 @@ func runDevice(ctx context.Context, job Job, d workspace.Device, send func(Event
 	dr.Protocol = s.Protocol()
 
 	state("probing", 0)
-	caps, err := job.Probe(ctx, s, d.HostOnly(), opt.ConnectTimeout)
+	// FTP is only probed (and used) on the default port 21 of the bare host.
+	// An explicit port in devices.csv usually means a NAT/port forward, where
+	// port 21 of that address belongs to a different machine: skip FTP.
+	ftpHost := d.HostOnly()
+	if _, _, err := net.SplitHostPort(d.Host); err == nil {
+		ftpHost = ""
+	}
+	caps, err := job.Probe(ctx, s, ftpHost, opt.ConnectTimeout, cmdTimeout)
 	if err != nil {
 		dr.Error = redact("probe: "+err.Error(), d.Password)
 		msg := "probe failed"

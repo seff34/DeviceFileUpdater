@@ -21,7 +21,7 @@ import (
 	"devupdater/internal/workspace"
 )
 
-func localProbe(context.Context, transport.Session, string, time.Duration) (probe.Caps, error) {
+func localProbe(context.Context, transport.Session, string, time.Duration, time.Duration) (probe.Caps, error) {
 	return probe.Caps{Tools: map[string]bool{"base64": true}}, nil
 }
 
@@ -293,5 +293,31 @@ func TestHostKeyMismatchSurfaced(t *testing.T) {
 	d := Run(context.Background(), job, nil).Devices[0]
 	if !strings.Contains(d.Error, "host key mismatch") || d.Files[0].Error != "host key mismatch" {
 		t.Fatalf("%+v", d)
+	}
+}
+
+// FTP detection dials port 21 on the bare host; with an explicit port (NAT
+// forward) that would reach a different machine, so it is skipped.
+func TestProbeArgs(t *testing.T) {
+	job := baseJob(t.TempDir())
+	job.Settings.CommandTimeoutSec = 7
+	job.Devices = []workspace.Device{{Host: "10.0.0.1"}, {Host: "10.0.0.2:2222"}}
+	var mu sync.Mutex
+	hosts := map[string]string{}
+	job.Probe = func(_ context.Context, s transport.Session, ftpHost string, _, cmdTimeout time.Duration) (probe.Caps, error) {
+		if cmdTimeout != 7*time.Second {
+			t.Errorf("cmdTimeout = %v", cmdTimeout)
+		}
+		mu.Lock()
+		hosts[ftpHost] = ftpHost
+		mu.Unlock()
+		return localProbe(context.Background(), s, ftpHost, 0, 0)
+	}
+	Run(context.Background(), job, nil)
+	if _, ok := hosts["10.0.0.1"]; !ok || len(hosts) != 2 {
+		t.Fatalf("ftp hosts %v", hosts)
+	}
+	if _, ok := hosts[""]; !ok {
+		t.Fatalf("explicit-port device must get empty ftp host: %v", hosts)
 	}
 }

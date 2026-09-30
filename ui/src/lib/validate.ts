@@ -1,4 +1,4 @@
-import type { Device, ManifestEntry } from './types'
+import type { Device, ManifestEntry, Settings } from './types'
 
 export type RowErrors = Partial<Record<string, string>> | null
 
@@ -34,4 +34,16 @@ export function validateManifest(es: ManifestEntry[]): RowErrors[] {
     if (remote && !seen.has(remote)) seen.set(remote, i)
     return Object.keys(errs).length ? errs : null
   })
+}
+
+const POLICIES: readonly string[] = ['on_change', 'always', 'never']
+
+/** Mirrors workspace.Settings.Validate: parallel 1..200, known policy, timeouts >= 1 (no upper bound). */
+export function validateSettings(s: Settings): Partial<Record<keyof Settings, string>> {
+  const e: Partial<Record<keyof Settings, string>> = {}
+  if (!Number.isInteger(s.parallel) || s.parallel < 1 || s.parallel > 200) e.parallel = '1 ile 200 arasında bir tam sayı girin.'
+  if (!POLICIES.includes(s.post_command_policy)) e.post_command_policy = 'Geçerli bir seçenek seçin.'
+  if (!Number.isInteger(s.connect_timeout_sec) || s.connect_timeout_sec < 1) e.connect_timeout_sec = 'En az 1 saniye olan bir tam sayı girin.'
+  if (!Number.isInteger(s.command_timeout_sec) || s.command_timeout_sec < 1) e.command_timeout_sec = 'En az 1 saniye olan bir tam sayı girin.'
+  return e
 }

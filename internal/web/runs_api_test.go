@@ -226,3 +226,30 @@ func TestEventsWithoutRunIs404(t *testing.T) {
 		t.Fatalf("state %q", st.State)
 	}
 }
+
+func TestConnectionTestRejectedDuringRun(t *testing.T) {
+	block := func(opt *Options) {
+		fakeDevices(opt)
+		inner := opt.Dial
+		opt.Dial = func(ctx context.Context, d workspace.Device, o transport.Options) (transport.Session, error) {
+			if d.Host == "slow" {
+				<-ctx.Done()
+				return nil, ctx.Err()
+			}
+			return inner(ctx, d, o)
+		}
+	}
+	_, ts, c := newTestServer(t, block)
+	setupRunWorkspace(t, ts.URL, c, "slow")
+	if code := doJSON(t, c, "POST", ts.URL+"/api/runs", map[string]any{"dry_run": true}, nil); code != http.StatusAccepted {
+		t.Fatalf("start: %d", code)
+	}
+	var e struct{ Error string }
+	if code := doJSON(t, c, "POST", ts.URL+"/api/test-connection", map[string]any{}, &e); code != http.StatusConflict || !strings.Contains(e.Error, "Çalışma sürerken") {
+		t.Fatalf("test-connection during run: %d %q", code, e.Error)
+	}
+	if code := doJSON(t, c, "DELETE", ts.URL+"/api/runs/current", nil, nil); code != http.StatusNoContent {
+		t.Fatalf("cancel: %d", code)
+	}
+	readSSE(t, c, ts.URL) // waits for run_done so the run goroutine finishes
+}

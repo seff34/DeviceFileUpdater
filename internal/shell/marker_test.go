@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -114,5 +115,33 @@ func TestExecStreamClosedMidCommand(t *testing.T) {
 	}
 	if _, _, err := m.Exec(ctx(t), "y"); err == nil {
 		t.Fatal("expected error after closed stream")
+	}
+}
+
+func pumpCount() int {
+	buf := make([]byte, 1<<20)
+	n := runtime.Stack(buf, true)
+	return strings.Count(string(buf[:n]), "shell.(*MarkerSession).pump")
+}
+
+// endless never stops producing data, so the pump fills its channel and blocks.
+type endless struct{}
+
+func (endless) Read(p []byte) (int, error) { p[0] = 'x'; return 1, nil }
+
+func TestCloseStopsReader(t *testing.T) {
+	before := pumpCount()
+	m := NewMarkerSession(endless{}, io.Discard, "\n")
+	time.Sleep(20 * time.Millisecond) // let the pump fill its buffer and block
+	m.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for pumpCount() > before {
+		if time.Now().After(deadline) {
+			t.Fatal("reader goroutine still running after Close")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, _, err := m.Exec(ctx(t), "x"); err == nil {
+		t.Fatal("Exec after Close must fail")
 	}
 }

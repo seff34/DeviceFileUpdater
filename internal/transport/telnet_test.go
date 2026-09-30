@@ -149,3 +149,37 @@ func TestIACReaderStripsANSIEscapes(t *testing.T) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
+
+// Commands ending in `&`, `;` or a comment reach the device intact over both
+// echoing marker transports (telnet and SSH PTY) and report their exit status.
+func TestMarkerCommandShapes(t *testing.T) {
+	codes := map[string]int{"sleep 0 &": 0, "true;": 0, "true # c": 0, "false;": 1, "exit3 # c": 3}
+	h := func(cmd string) (string, int) {
+		if c, ok := codes[cmd]; ok {
+			return "", c
+		}
+		return "unexpected: " + cmd, 99
+	}
+	dials := map[string]func() (Session, error){
+		"telnet": func() (Session, error) {
+			return DialTelnet(context.Background(), testutil.StartFakeTelnet(t, "u", "p", h), "u", "p", testOpts())
+		},
+		"ssh-pty": func() (Session, error) {
+			addr := testutil.FakeSSH{User: "u", Pass: "p", NoExec: true, Handler: h}.Start(t)
+			return DialSSH(context.Background(), addr, "u", "p", testOpts())
+		},
+	}
+	for name, dial := range dials {
+		s, err := dial()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for cmd, want := range codes {
+			out, code, err := s.Exec(context.Background(), cmd)
+			if err != nil || code != want || out != "" {
+				t.Fatalf("%s %q: out=%q code=%d err=%v", name, cmd, out, code, err)
+			}
+		}
+		s.Close()
+	}
+}

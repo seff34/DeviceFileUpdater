@@ -128,7 +128,7 @@ func DialTelnet(ctx context.Context, addr, user, pass string, opt Options) (Sess
 	m := shell.NewMarkerSession(&iacReader{c: conn}, conn, "\r\n")
 	lctx, cancel := context.WithTimeout(ctx, opt.ConnectTimeout+opt.CommandTimeout)
 	defer cancel()
-	fail := func(e error) (Session, error) { conn.Close(); return nil, e }
+	fail := func(e error) (Session, error) { m.Close(); conn.Close(); return nil, e }
 
 	if _, err := m.Expect(lctx, reLogin); err != nil {
 		return fail(fmt.Errorf("telnet %s: no login prompt: %w", addr, err))
@@ -158,4 +158,7 @@ func (s *telnetSession) Exec(ctx context.Context, cmd string) (string, int, erro
 	return s.m.Exec(ctx, cmd)
 }
 func (s *telnetSession) Protocol() string { return "telnet" }
-func (s *telnetSession) Close() error     { return s.conn.Close() }
+func (s *telnetSession) Close() error {
+	s.m.Close()
+	return s.conn.Close()
+}

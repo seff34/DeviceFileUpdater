@@ -104,6 +104,7 @@ func (s *SSHSession) startPTY(ctx context.Context) error {
 	}
 	m := shell.NewMarkerSession(stdout, stdin, "\n")
 	if err := m.Init(ctx); err != nil {
+		m.Close()
 		return err
 	}
 	s.pty = m
@@ -149,7 +150,12 @@ func (s *SSHSession) Exec(ctx context.Context, cmd string) (string, int, error) 
 
 func (s *SSHSession) Client() *ssh.Client { return s.client }
 func (s *SSHSession) Protocol() string    { return "ssh" }
-func (s *SSHSession) Close() error        { return s.client.Close() }
+func (s *SSHSession) Close() error {
+	if s.pty != nil {
+		s.pty.Close()
+	}
+	return s.client.Close()
+}
 
 // isSSHAuthError reports credential rejection. OpenSSH without keyboard-interactive
 // answers our keyboard-interactive attempt with USERAUTH_FAILURE (type 51), which

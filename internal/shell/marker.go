@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -25,12 +26,16 @@ type MarkerSession struct {
 	broken  error
 	// pendingNL: the newline ending the last marker line had not arrived yet.
 	pendingNL bool
+	done      chan struct{} // closed by Close; stops the reader goroutine
+	closeOnce sync.Once
 }
+
+var errClosed = errors.New("session closed")
 
 func NewMarkerSession(r io.Reader, w io.Writer, newline string) *MarkerSession {
 	nb := make([]byte, 4)
 	rand.Read(nb)
-	m := &MarkerSession{w: w, newline: newline, nonce: hex.EncodeToString(nb), in: make(chan []byte, 64)}
+	m := &MarkerSession{w: w, newline: newline, nonce: hex.EncodeToString(nb), in: make(chan []byte, 64), done: make(chan struct{})}
 	go m.pump(r)
 	return m
 }
@@ -42,7 +47,11 @@ func (m *MarkerSession) pump(r io.Reader) {
 		if n > 0 {
 			c := make([]byte, n)
 			copy(c, b[:n])
-			m.in <- c
+			select {
+			case m.in <- c:
+			case <-m.done:
+				return
+			}
 		}
 		if err != nil {
 			m.readErr = err
@@ -72,9 +81,16 @@ func (m *MarkerSession) readMore(ctx context.Context) error {
 		}
 		m.buf = append(m.buf, b...)
 		return nil
+	case <-m.done:
+		return errClosed
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// Close stops the reader goroutine. It does not close the underlying stream.
+func (m *MarkerSession) Close() {
+	m.closeOnce.Do(func() { close(m.done) })
 }
 
 func (m *MarkerSession) Send(s string) error {
@@ -113,7 +129,9 @@ func (m *MarkerSession) Exec(ctx context.Context, cmd string) (string, int, erro
 	tag := fmt.Sprintf("__DU_%s_%d_", m.nonce, m.n)
 	echoed := []byte(tag + "$?__\"")
 	re := regexp.MustCompile(regexp.QuoteMeta(tag) + `(\d+)__`)
-	if _, err := io.WriteString(m.w, cmd+`; echo "`+tag+`$?__"`+m.newline); err != nil {
+	// The marker goes on its own line so commands ending in `&`, `;` or a
+	// comment cannot break or swallow it.
+	if _, err := io.WriteString(m.w, cmd+m.newline+`echo "`+tag+`$?__"`+m.newline); err != nil {
 		m.broken = err
 		return "", -1, err
 	}

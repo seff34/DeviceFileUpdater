@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-30T22:50:00+03:00",
+  "title": "Design System: DeviceFileUpdater",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Signal Blue", "canonical": "#2563eb", "tonalRamp": ["#172554", "#1e3a8a", "#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa", "#93c5fd", "#dbeafe"] },
+      "surface": { "role": "neutral", "displayName": "Bench White", "canonical": "#fafafa", "tonalRamp": ["#09090b", "#18181b", "#27272a", "#3f3f46", "#52525b", "#a1a1aa", "#e4e4e7", "#fafafa"] },
+      "card": { "role": "neutral", "displayName": "Panel", "canonical": "#ffffff" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#09090b" },
+      "muted-ink": { "role": "neutral", "displayName": "Quiet Ink", "canonical": "#52525b" },
+      "hairline": { "role": "neutral", "displayName": "Hairline", "canonical": "#e4e4e7" },
+      "field-stroke": { "role": "neutral", "displayName": "Field Stroke", "canonical": "#d4d4d8" },
+      "muted": { "role": "neutral", "displayName": "Wash", "canonical": "#f4f4f5" },
+      "status-ok": { "role": "status", "displayName": "Written Green", "canonical": "#047857", "tonalRamp": ["#022c22", "#064e3b", "#065f46", "#047857", "#059669", "#34d399", "#6ee7b7", "#d1fae5"] },
+      "status-warn": { "role": "status", "displayName": "Pending Amber", "canonical": "#b45309", "tonalRamp": ["#451a03", "#78350f", "#92400e", "#b45309", "#d97706", "#fbbf24", "#fcd34d", "#fef3c7"] },
+      "status-fail": { "role": "status", "displayName": "Fault Red", "canonical": "#dc2626", "tonalRamp": ["#450a0a", "#7f1d1d", "#991b1b", "#dc2626", "#ef4444", "#f87171", "#fca5a5", "#fee2e2"] },
+      "status-same": { "role": "status", "displayName": "Unchanged Zinc", "canonical": "#52525b" }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "One per page: the step title." },
+      "title": { "displayName": "Title", "purpose": "Result sentences and section heads inside a step." },
+      "body": { "displayName": "Body", "purpose": "All operational text: table cells, help, dialogs." },
+      "label": { "displayName": "Label", "purpose": "Badges, filter counters, stepper numerals." },
+      "mono": { "displayName": "Mono", "purpose": "Hosts, paths, modes, hashes, report IDs." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-out-strong", "value": "cubic-bezier(0.23, 1, 0.32, 1)", "purpose": "Every UI transition: button press, progress bars, stage crossfade." },
+      { "name": "press", "value": "transform 120ms", "purpose": "Button press to scale(0.98)." },
+      { "name": "color", "value": "background-color 150ms ease, color 150ms ease", "purpose": "Button hover and state colour." },
+      { "name": "stage-in", "value": "opacity 150ms", "purpose": "Apply grid stage cell crossfade on change." },
+      { "name": "progress", "value": "transform 200ms", "purpose": "scaleX of progress bars." }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "768px", "purpose": "Stepper expands from 'Adım N/7' to the full row." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single filled action of a view; advances the wizard.",
+      "html": "<button class=\"ds-btn-primary\">Devam <svg width=\"16\" height=\"16\" viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z\"/></svg></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: #2563eb; color: #fff; font: 500 14px/1 'Geist Variable', system-ui, sans-serif; cursor: pointer; transition: transform 120ms cubic-bezier(0.23,1,0.32,1), background-color 150ms ease; } .ds-btn-primary:hover { background: rgb(37 99 235 / 0.8); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.5); } .ds-btn-primary:active { transform: scale(0.98); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Geri, toolbar actions, and the demoted forward action.",
+      "html": "<button class=\"ds-btn-outline\">Cihaz ekle</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid #d4d4d8; border-radius: 6px; background: #fff; color: #09090b; font: 500 14px/1 'Geist Variable', system-ui, sans-serif; cursor: pointer; transition: transform 120ms cubic-bezier(0.23,1,0.32,1), background-color 150ms ease; } .ds-btn-outline:hover { background: #f4f4f5; } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.5); } .ds-btn-outline:active { transform: scale(0.98); }"
+    },
+    {
+      "name": "Mono Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Field for IP:port and remote paths.",
+      "html": "<input class=\"ds-input\" placeholder=\"örn. 10.0.0.21\" />",
+      "css": ".ds-input { height: 32px; width: 220px; padding: 4px 10px; border: 1px solid #d4d4d8; border-radius: 6px; background: transparent; color: #09090b; font: 400 14px/1.43 'Geist Mono Variable', ui-monospace, monospace; outline: none; transition: border-color 150ms ease; } .ds-input::placeholder { color: #52525b; } .ds-input:focus-visible { border-color: #2563eb; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.5); }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "status-badge",
+      "description": "File status in the preview matrix and report; always icon + label.",
+      "html": "<span class=\"ds-badge ds-badge-ok\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M176.49,95.51a12,12,0,0,1,0,17l-56,56a12,12,0,0,1-17,0l-24-24a12,12,0,1,1,17-17L112,143l47.51-47.52A12,12,0,0,1,176.49,95.51ZM236,128A108,108,0,1,1,128,20,108.12,108.12,0,0,1,236,128Zm-24,0a84,84,0,1,0-84,84A84.09,84.09,0,0,0,212,128Z\"/></svg>Oluşturuldu</span> <span class=\"ds-badge ds-badge-fail\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M168.49,104.49,145,128l23.52,23.51a12,12,0,0,1-17,17L128,145l-23.51,23.52a12,12,0,0,1-17-17L111,128,87.51,104.49a12,12,0,0,1,17-17L128,111l23.51-23.52a12,12,0,0,1,17,17ZM236,128A108,108,0,1,1,128,20,108.12,108.12,0,0,1,236,128Zm-24,0a84,84,0,1,0-84,84A84.09,84.09,0,0,0,212,128Z\"/></svg>Başarısız</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid; border-radius: 6px; font: 500 12px/1.33 'Geist Variable', system-ui, sans-serif; white-space: nowrap; } .ds-badge-ok { color: #047857; background: rgb(4 120 87 / 0.1); border-color: rgb(4 120 87 / 0.25); } .ds-badge-fail { color: #dc2626; background: rgb(220 38 38 / 0.1); border-color: rgb(220 38 38 / 0.25); }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat panel on the surface: hairline, no shadow.",
+      "html": "<div class=\"ds-card\"><p class=\"ds-card-k\">Başarısız cihaz</p><p class=\"ds-card-v\">1</p></div>",
+      "css": ".ds-card { width: 200px; padding: 16px; border: 1px solid #e4e4e7; border-radius: 6px; background: #fff; font-family: 'Geist Variable', system-ui, sans-serif; } .ds-card-k { margin: 0; font-size: 14px; color: #52525b; } .ds-card-v { margin: 4px 0 0; font-size: 24px; font-weight: 600; color: #dc2626; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Stepper",
+      "kind": "nav",
+      "refersTo": "top-bar",
+      "description": "Seven-step wizard navigation: done, current, reachable, blocked.",
+      "html": "<nav class=\"ds-steps\"><a class=\"ds-step is-done\"><span class=\"ds-num\">✓</span>Cihazlar</a><a class=\"ds-step is-current\" aria-current=\"step\"><span class=\"ds-num\">5</span>Önizleme</a><a class=\"ds-step is-blocked\"><span class=\"ds-num\">6</span>Uygula</a></nav>",
+      "css": ".ds-steps { display: flex; gap: 24px; padding: 0 24px; border-bottom: 1px solid #e4e4e7; background: #fff; font: 400 14px/1.43 'Geist Variable', system-ui, sans-serif; } .ds-step { display: flex; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 2px solid transparent; color: #09090b; text-decoration: none; cursor: pointer; } .ds-step:hover { color: #2563eb; } .ds-step:focus-visible { outline: none; box-shadow: 0 0 0 2px #2563eb; } .ds-num { display: inline-grid; place-items: center; width: 20px; height: 20px; border: 1px solid #e4e4e7; border-radius: 6px; font-size: 12px; font-weight: 500; } .is-done .ds-num { background: #09090b; color: #fafafa; } .is-current { border-bottom-color: #2563eb; font-weight: 500; } .is-current .ds-num { background: #2563eb; border-color: #2563eb; color: #fff; } .is-blocked { color: #a1a1aa; cursor: not-allowed; }"
+    },
+    {
+      "name": "Live Apply Row",
+      "kind": "custom",
+      "description": "Signature: fixed 44px row updated in place; mono counter and 4px progress.",
+      "html": "<table class=\"ds-grid\"><tr><th>127.0.0.1:61083</th><td class=\"ds-fail\">Başarısız</td><td><span class=\"ds-count\">0/2</span><span class=\"ds-track\"><span class=\"ds-bar\" style=\"transform:scaleX(0)\"></span></span></td><td class=\"ds-fail ds-trunc\">connect: connection refused</td></tr><tr><th>127.0.0.1:61080</th><td class=\"ds-ok\">Tamamlandı</td><td><span class=\"ds-count\">2/2</span><span class=\"ds-track\"><span class=\"ds-bar ds-bar-ok\" style=\"transform:scaleX(1)\"></span></span></td><td class=\"ds-muted\">2 oluşturuldu</td></tr></table>",
+      "css": ".ds-grid { width: 640px; table-layout: fixed; border-collapse: separate; border-spacing: 0; border: 1px solid #e4e4e7; border-radius: 6px; background: #fff; font: 400 14px/1.43 'Geist Variable', system-ui, sans-serif; } .ds-grid tr { height: 44px; } .ds-grid th, .ds-grid td { padding: 0 12px; border-bottom: 1px solid #e4e4e7; text-align: left; } .ds-grid th { font: 400 14px 'Geist Mono Variable', monospace; } .ds-count { display: inline-block; width: 40px; font: 400 12px 'Geist Mono Variable', monospace; } .ds-track { display: inline-block; width: 60px; height: 4px; vertical-align: middle; overflow: hidden; border-radius: 6px; background: #f4f4f5; } .ds-bar { display: block; height: 100%; transform-origin: left; background: #dc2626; transition: transform 200ms cubic-bezier(0.23,1,0.32,1); } .ds-bar-ok { background: #2563eb; } .ds-ok { color: #047857; } .ds-fail { color: #dc2626; } .ds-muted { color: #52525b; } .ds-trunc { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calibrated Instrument",
+    "overview": "DeviceFileUpdater is a bench instrument, not a dashboard. A technician on a production line opens it on a laptop under bright factory light, walks a seven-step wizard, and must leave with proof of what was written to which device. The interface is the category standard played straight: a restrained shadcn/ui operator console at Vercel-dashboard craft, zinc neutrals, one blue accent, hairline borders, and nothing that competes with the data.\n\nDensity is medium. Tables and matrices carry the weight; chrome stays thin. Every screen answers three questions without scrolling: which step am I on, what blocks the next step, and what will happen to which device. Brand lives in precision: tabular numerals everywhere, mono for every machine value, in-place updates with no layout jump.\n\nThe system rejects novelty worlds and the generic admin template (sidebar, stat-card mosaics, colour on every surface). It works fully offline, so it ships its own fonts and loads nothing remote.",
+    "keyCharacteristics": [
+      "Zinc surfaces, hairline borders, one accent reserved for the primary action and focus.",
+      "Status always travels as colour + Phosphor icon + Turkish text label, never colour alone.",
+      "Geist for interface, Geist Mono for IPs, paths, file modes and hashes.",
+      "One 6px radius on every shape; no pills.",
+      "Light by default, dark via `prefers-color-scheme`."
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "Signal Blue appears on at most one filled button per view. When a page body already owns the primary action (for example \"Başarısızları tekrar dene\" on a report with failures), the action bar's forward button drops to outline.", "section": "colors" },
+      { "name": "The Never Colour Alone Rule", "body": "No status is expressed by hue only. Every status carries its icon (CheckCircle, XCircle, WarningCircle, CircleNotch, Circle) and a Turkish label, and failure counts spell out \"başarısız\".", "section": "colors" },
+      { "name": "The Machine Values Are Mono Rule", "body": "Anything a technician might copy into a terminal (host, path, mode, hash, report ID) is set in Geist Mono. Human language never is.", "section": "typography" },
+      { "name": "The Turkish Copy Rule", "body": "All UI copy is Turkish, uses no em or en dash, and writes examples as \"örn. …\" so placeholders never read as entered values.", "section": "typography" },
+      { "name": "The Hairline Not Shadow Rule", "body": "Separate with a 1px hairline or a tonal step. Do not add drop shadows to cards, tables or rows.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep a single filled Signal Blue button per view; demote the other to outline.",
+      "Do pair every status with its Phosphor icon and Turkish label.",
+      "Do set hosts, paths, modes, hashes and report IDs in Geist Mono.",
+      "Do use `grid-cols-1` on any grid that can hold long unbroken text, and scroll wide tables inside their own container.",
+      "Do keep motion to transform, opacity or colour, at 120-200ms, on `cubic-bezier(0.23, 1, 0.32, 1)`, and remove it under `prefers-reduced-motion`.",
+      "Do use Phosphor icons only."
+    ],
+    "donts": [
+      "Don't use pill shapes (`rounded-full`) or any radius other than 6px.",
+      "Don't use `transition: all` or animate layout properties.",
+      "Don't add a sidebar, stat-card mosaic, gradients, or drop shadows on cards.",
+      "Don't use em or en dashes in UI copy, or show example text that looks like an entered value.",
+      "Don't convey a status by colour alone.",
+      "Don't load fonts, icons or scripts from the network; the tool runs offline."
+    ]
+  }
+}

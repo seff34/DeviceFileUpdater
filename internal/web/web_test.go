@@ -3,6 +3,7 @@ package web
 import (
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -126,5 +127,16 @@ func TestRecentStore(t *testing.T) {
 	// persisted
 	if again := newRecentStore(r.dir).list(); len(again) != maxRecent || again[0] != "/i" {
 		t.Fatalf("not persisted: %v", again)
+	}
+}
+
+func TestIndexHasAntiFramingHeaders(t *testing.T) {
+	rec := httptest.NewRecorder()
+	staticHandler().ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Fatalf("X-Frame-Options = %q", got)
+	}
+	if got := rec.Header().Get("Content-Security-Policy"); got != "frame-ancestors 'none'" {
+		t.Fatalf("CSP = %q", got)
 	}
 }

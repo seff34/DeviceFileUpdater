@@ -35,6 +35,8 @@ func staticHandler() http.Handler {
 		// SPA fallback: every unknown non-API path renders the app.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 		if indexErr != nil {
 			w.Write([]byte(notBuilt))
 			return

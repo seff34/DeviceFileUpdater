@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeviceFileUpdater Raporu {{.Run.ID}}</title>
+<style>
+:root{--bg:#fafafa;--fg:#1a1a1a;--muted:#666;--line:#e3e3e3;--ok:#1f7a3a;--chg:#1d5fb8;--bad:#b3261e;--card:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#121212;--fg:#eee;--muted:#9a9a9a;--line:#2c2c2c;--ok:#5cc07a;--chg:#6fa8f5;--bad:#f2766b;--card:#1b1b1b}}
+body{font:14px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg);margin:0;padding:24px}
+h1{font-size:20px;margin:0 0 4px}.muted{color:var(--muted)}
+.cards{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;min-width:110px}
+.card b{display:block;font-size:22px}
+table{border-collapse:collapse;width:100%;background:var(--card);margin:8px 0 24px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted)}
+.CREATED,.UPDATED{color:var(--chg)}.UNCHANGED{color:var(--ok)}.FAILED{color:var(--bad);font-weight:600}
+.dev{margin-top:20px}.err{color:var(--bad)}code{font-size:12px}
+</style>
+</head>
+<body>
+<h1>Dosya güncelleme raporu {{if .Run.DryRun}}(ön izleme / dry-run){{end}}</h1>
+<div class="muted">Çalıştırma {{.Run.ID}} · süre {{.Duration}} · paralel {{.Run.Parallel}}</div>
+
+<div class="cards">
+  <div class="card"><b>{{.Counts.Devices}}</b>cihaz</div>
+  <div class="card"><b class="FAILED">{{.Counts.DevicesFailed}}</b>hatalı cihaz</div>
+  {{range $s := .StatusOrder}}{{with index $.Counts.ByStatus $s}}<div class="card"><b class="{{$s}}">{{.}}</b>{{$s}}</div>{{end}}{{end}}
+</div>
+
+<h2>Dosyalar</h2>
+<ul>{{range .Run.Files}}<li><code>{{.}}</code></li>{{end}}</ul>
+
+{{range .Run.Devices}}
+<div class="dev">
+  <h3>{{.Host}} <span class="muted">{{.Protocol}} · yükleme {{.UploadMethod}} · hash {{.HashMethod}} · {{.DurationMS}} ms</span></h3>
+  {{if .Error}}<div class="err">{{.Error}}</div>{{end}}
+  <table>
+    <tr><th>Dosya</th><th>Durum</th><th>Yöntem</th><th>ms</th><th>Hata / not</th></tr>
+    {{range .Files}}
+    <tr><td><code>{{.Remote}}</code></td><td class="{{.Status}}">{{.Status}}</td><td>{{.Method}}</td><td>{{.DurationMS}}</td><td>{{.Error}}{{if and .Error .Note}} · {{end}}{{.Note}}</td></tr>
+    {{end}}
+  </table>
+  {{with .Post}}<div>Sonrası komut <code>{{.Command}}</code> → çıkış {{.ExitCode}} {{if .Error}}<span class="err">{{.Error}}</span>{{end}}<pre>{{.Output}}</pre></div>{{end}}
+</div>
+{{end}}
+</body>
+</html>

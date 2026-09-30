@@ -16,6 +16,7 @@ const GUIDE: Record<StepId, ReactNode[]> = {
     <>Cihazları <B>Cihaz ekle</B> ile tek tek girin veya <B>Toplu ekle</B> ile Excel'den IP, kullanıcı adı ve şifre sütunlarını yapıştırın.</>,
     <>Standart dışı port için IP'nin sonuna yazın: <Mono>10.0.0.21:2222</Mono>. SSH veya Telnet otomatik seçilir.</>,
     <><B>Tümünü test et</B> ile her cihaza bağlanın. Bağlantı sütunu protokolü ve bulunan araçları gösterir; kırmızı satırlar ulaşılamayan cihazlardır.</>,
+    <>Bağlanılamayan cihaz olursa tablonun üstünde bir uyarı çıkar. <B>Sadece sorunluları göster</B> ile yalnız onları listeleyin, bilgileri düzeltip <B>Sorunluları tekrar test et</B> deyin; tüm listeyi yeniden test etmek gerekmez.</>,
     <>Ulaşılamayan cihazları <B>Ulaşılamayanları çıkar</B> ile listeden atabilir ya da bırakabilirsiniz; bırakılırsa raporda başarısız görünürler.</>,
   ],
   files: [
@@ -31,11 +32,11 @@ const GUIDE: Record<StepId, ReactNode[]> = {
   preview: [
     <><B>Önizlemeyi başlat</B> her cihaza bağlanır ve dosyaları karşılaştırır. Cihaza hiçbir şey yazılmaz.</>,
     <>Tabloda her cihaz ve dosya için sonuç görünür: <B>Oluşturulacak</B>, <B>Güncellenecek</B>, <B>Aynı</B> veya hata.</>,
-    <>Sonucu inceleyip onay kutusunu işaretleyin, ardından <B>Uygulamayı başlat</B> deyin. Önizlemeden sonra cihaz, dosya veya ayar değişirse önizleme yeniden istenir.</>,
+    <>Sonucu inceleyip alttaki çubukta <B>Değişiklikleri inceledim</B> kutusunu işaretleyin, ardından <B>Uygulamayı başlat</B> deyin. Önizlemeden sonra cihaz, dosya veya ayar değişirse önizleme yeniden istenir.</>,
   ],
   apply: [
     <>Her cihazın aşaması ve dosya sayısı canlı güncellenir. <B>Başarısız</B> sekmesi yalnız sorunlu cihazları gösterir.</>,
-    <>Gerekirse <B>İptal et</B> ile durdurun. Henüz bitmemiş cihazlar raporda iptal edildi olarak görünür.</>,
+    <>Gerekirse <B>İptal et</B> ile durdurun. Henüz bitmemiş cihazlar <B>İptal edildi</B> olarak, başarısızlardan ayrı görünür; raporda <B>Başarısızları tekrar dene</B> onları da yeniden dener.</>,
     <>Çalışma sürerken uygulamanın açık olduğu terminal penceresini kapatmayın.</>,
   ],
   report: [

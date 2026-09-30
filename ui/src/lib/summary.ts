@@ -51,16 +51,19 @@ export function previewSentence(r: RunResult): string {
 export function resultSentence(r: RunResult): string {
   const t = tally(r)
   if (t.devices === 0) return 'Hiçbir cihaz işlenmedi.'
+  // A cancelled device is not a failure the technician has to investigate, so it is counted apart.
+  const cancelled = r.devices.filter(isCancelled).length
+  const failed = t.failedDevices - cancelled
   const ok = t.devices - t.failedDevices
-  const head = t.failedDevices
-    ? `${t.devices} cihazdan ${ok} tanesi başarılı, ${t.failedDevices} tanesi başarısız.`
-    : `${t.devices} cihazın tamamı başarılı.`
+  const counts = [ok && `${ok} tanesi başarılı`, failed && `${failed} tanesi başarısız`, cancelled && `${cancelled} tanesi iptal edildi`].filter(Boolean)
+  const head = ok === t.devices ? `${t.devices} cihazın tamamı başarılı.` : `${t.devices} cihazdan ${counts.join(', ')}.`
   const parts: string[] = []
   const b = t.byStatus
+  const failedFiles = r.devices.flatMap((d) => d.files).filter((f) => f.status === 'FAILED' && f.error !== 'cancelled').length
   if (b.CREATED) parts.push(`${b.CREATED} dosya oluşturuldu`)
   if (b.UPDATED) parts.push(`${b.UPDATED} dosya güncellendi`)
   if (b.UNCHANGED) parts.push(`${b.UNCHANGED} dosya aynıydı`)
-  if (b.FAILED) parts.push(`${b.FAILED} dosya başarısız`)
+  if (failedFiles) parts.push(`${failedFiles} dosya başarısız`)
   return parts.length ? `${head} ${parts.join(', ')}.` : head
 }
 

@@ -1,4 +1,4 @@
-import { ArrowClockwise, ArrowSquareOut, CaretRight, CheckCircle, DownloadSimple, XCircle } from '@phosphor-icons/react'
+import { ArrowClockwise, ArrowSquareOut, CaretRight, CheckCircle, DownloadSimple, Prohibit, XCircle } from '@phosphor-icons/react'
 import { ErrorText } from '@/components/ErrorText'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fragment, memo, useCallback, useMemo, useState } from 'react'
@@ -17,11 +17,12 @@ import { useWizard } from '@/wizard/WizardContext'
 
 const RETRY_LIST_MAX = 10
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: string }) {
+function Stat({ label, value, tone, note }: { label: string; value: number; tone?: string; note?: string }) {
   return (
     <div className="px-5 py-4">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn('mt-1 text-2xl font-semibold tabular-nums tracking-tight', tone)}>{value}</p>
+      {note && <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{note}</p>}
     </div>
   )
 }
@@ -51,8 +52,8 @@ const DeviceRow = memo(function DeviceRow({ d, expanded, onToggle }: { d: Device
           </button>
         </td>
         <td className="px-3 py-2">
-          <span className={cn('inline-flex items-center gap-1.5', failed ? 'text-fail' : 'text-ok')}>
-            {failed ? <XCircle size={16} weight="bold" aria-hidden /> : <CheckCircle size={16} weight="bold" aria-hidden />}
+          <span className={cn('inline-flex items-center gap-1.5', cancelled ? 'text-same' : failed ? 'text-fail' : 'text-ok')}>
+            {cancelled ? <Prohibit size={16} weight="bold" aria-hidden /> : failed ? <XCircle size={16} weight="bold" aria-hidden /> : <CheckCircle size={16} weight="bold" aria-hidden />}
             {cancelled ? CANCELLED_TEXT : failed ? 'Başarısız' : 'Başarılı'}
           </span>
           {hasRealError(d) && <ErrorText raw={d.error!} className="mt-0.5 max-w-80 text-xs" />}
@@ -78,7 +79,7 @@ const DeviceRow = memo(function DeviceRow({ d, expanded, onToggle }: { d: Device
                   <StatusBadge status={f.status} />
                   <span className="hidden font-mono text-xs text-muted-foreground md:block">{f.method ?? ''}</span>
                   <span className="hidden text-xs tabular-nums text-muted-foreground md:block">{formatDuration(f.duration_ms)}</span>
-                  <span className="col-span-2 min-w-0 text-xs text-fail md:col-span-1">{f.error === 'cancelled' || !f.error ? fileErrorText(f.error) : <ErrorText raw={f.error} />}</span>
+                  <span className={cn('col-span-2 min-w-0 text-xs md:col-span-1', f.error === 'cancelled' ? 'text-muted-foreground' : 'text-fail')}>{f.error === 'cancelled' || !f.error ? fileErrorText(f.error) : <ErrorText raw={f.error} />}</span>
                 </li>
               ))}
             </ul>
@@ -103,6 +104,11 @@ export function ReportView({ result, reportId, allowRetry }: { result: RunResult
   const { facts } = useWizard()
   const t = tally(result)
   const b = t.byStatus
+  // Cancelled devices and files are shown apart from real failures, as in the summary sentence.
+  const cancelledDevices = result.devices.filter(isCancelled).length
+  const cancelledFiles = result.devices.flatMap((d) => d.files).filter((f) => f.status === 'FAILED' && f.error === 'cancelled').length
+  const failedDevices = t.failedDevices - cancelledDevices
+  const failedFiles = (b.FAILED ?? 0) - cancelledFiles
   const failedHosts = useMemo(() => result.devices.filter(deviceFailed).map((d) => d.host), [result])
   const [onlyFailed, setOnlyFailed] = useState(false)
   const [open, setOpen] = useState<Set<string>>(new Set())
@@ -158,7 +164,7 @@ export function ReportView({ result, reportId, allowRetry }: { result: RunResult
 
       <div className="grid grid-cols-2 divide-x divide-y rounded-md border bg-card sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
         <Stat label="Cihaz" value={t.devices} />
-        <Stat label="Başarısız cihaz" value={t.failedDevices} tone={t.failedDevices ? 'text-fail' : undefined} />
+        <Stat label="Başarısız cihaz" value={failedDevices} tone={failedDevices ? 'text-fail' : undefined} note={cancelledDevices ? `${cancelledDevices} iptal edildi` : undefined} />
         {result.dry_run ? (
           <>
             <Stat label="Oluşturulacak dosya" value={b.WOULD_CREATE ?? 0} />
@@ -171,7 +177,7 @@ export function ReportView({ result, reportId, allowRetry }: { result: RunResult
           </>
         )}
         <Stat label="Aynı kalan dosya" value={b.UNCHANGED ?? 0} />
-        <Stat label="Başarısız dosya" value={b.FAILED ?? 0} tone={b.FAILED ? 'text-fail' : undefined} />
+        <Stat label="Başarısız dosya" value={failedFiles} tone={failedFiles ? 'text-fail' : undefined} note={cancelledFiles ? `${cancelledFiles} iptal edildi` : undefined} />
       </div>
 
       <div>

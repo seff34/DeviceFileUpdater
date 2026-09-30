@@ -32,6 +32,9 @@ export function DevicesStep() {
   const [testing, setTesting] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [onlyProblems, setOnlyProblems] = useState(false)
+  // Rows that failed the last test and were edited since: untested again, but still the operator's to-do.
+  const [edited, setEdited] = useState<Set<string>>(new Set())
   const abortRef = useRef<AbortController | null>(null)
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -40,12 +43,21 @@ export function DevicesStep() {
     const c = checks[h]
     return c !== undefined && c !== 'testing' && !c.ok
   })
+  const pending = hosts.filter((h) => edited.has(h) && checks[h] === undefined)
+  const problems = [...unreachable, ...pending]
   const selectedHosts = hosts.filter((h) => selected.has(h))
+  // The filter switches itself off once nothing is left to show (render-time adjust).
+  if (onlyProblems && problems.length === 0 && !testing) setOnlyProblems(false)
   const ready = q.isSuccess
   const canTest = ready && state === 'saved' && draft.length > 0 && errors.every((e) => e === null) && !testing
 
   const update = (i: number, patch: Partial<Device>) => {
     const old = draft[i].host.trim()
+    const prev = checks[old]
+    if ((prev !== undefined && prev !== 'testing' && !prev.ok) || edited.has(old)) {
+      const next = (patch.host ?? draft[i].host).trim()
+      setEdited((e) => new Set([...e].filter((h) => h !== old)).add(next))
+    }
     // A changed credential or host invalidates that row's earlier test result.
     setChecks((c) => {
       if (!(old in c)) return c
@@ -84,6 +96,7 @@ export function DevicesStep() {
     const ac = new AbortController()
     abortRef.current = ac
     const targets = only.length ? only : hosts
+    setEdited((e) => new Set([...e].filter((h) => !targets.includes(h))))
     setChecks((c) => ({ ...c, ...Object.fromEntries(targets.map((h) => [h, 'testing' as const])) }))
     setTesting(true)
     try {
@@ -133,12 +146,24 @@ export function DevicesStep() {
         </div>
       </div>
 
-      {unreachable.length > 0 && !testing && (
+      {problems.length > 0 && !testing && (
         <Alert className="mb-3 border-warn/30 bg-warn/5">
           <WarningCircle className="text-warn" aria-hidden />
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3 text-foreground">
-            <span>{unreachable.length} cihaza bağlanılamadı. Listeden çıkarabilir veya olduğu gibi devam edebilirsiniz; bu cihazlar raporda başarısız görünür.</span>
-            <Button variant="outline" size="sm" onClick={() => setConfirmRemove(true)}>Ulaşılamayanları çıkar</Button>
+            <span>
+              {unreachable.length > 0
+                ? `${unreachable.length} cihaza bağlanılamadı. Nedeni Bağlantı sütununda yazıyor: bilgileri düzeltip tekrar test edin, listeden çıkarın ya da olduğu gibi devam edin; bu cihazlar raporda başarısız görünür.`
+                : `Bilgileri düzeltilen ${pending.length} cihaz henüz test edilmedi. Tekrar test edin.`}
+            </span>
+            <span className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" aria-pressed={onlyProblems} onClick={() => setOnlyProblems((v) => !v)}>
+                {onlyProblems ? 'Tüm cihazları göster' : `Sadece sorunluları göster (${problems.length})`}
+              </Button>
+              <Button variant="outline" size="sm" disabled={!canTest} onClick={() => runTest(problems)}>
+                <PlugsConnected aria-hidden /> Sorunluları tekrar test et
+              </Button>
+              {unreachable.length > 0 && <Button variant="outline" size="sm" onClick={() => setConfirmRemove(true)}>Ulaşılamayanları çıkar</Button>}
+            </span>
           </AlertDescription>
         </Alert>
       )}
@@ -182,6 +207,8 @@ export function DevicesStep() {
                 const hostErr = fieldError(i, 'host')
                 const userErr = fieldError(i, 'username')
                 const h = d.host.trim()
+                // A row being edited stays visible until it is tested again (its check is cleared on edit).
+                if (onlyProblems && checks[h] !== undefined && checks[h] !== 'testing' && (checks[h] as CheckResult).ok) return null
                 return (
                   <TableRow key={i} className="align-top">
                     <TableCell className="pt-3">

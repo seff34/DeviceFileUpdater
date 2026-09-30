@@ -72,6 +72,33 @@ describe('DevicesStep', () => {
     await waitFor(() => expect(puts().length).toBeGreaterThan(0), { timeout: 2000 })
     expect((puts().at(-1)!.body as { devices: Device[] }).devices.map((d) => d.host)).toEqual(['10.0.0.1'])
   })
+  it('filters the table to problem devices and retests only those', async () => {
+    renderWithProviders(<DevicesStep />, { path: '/devices' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Tümünü test et' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Sadece sorunluları göster (1)' }))
+    expect(screen.queryByLabelText('IP, satır 1')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('IP, satır 2')).toHaveValue('10.0.0.2')
+    await userEvent.click(screen.getByRole('button', { name: /Sorunluları tekrar test et/ }))
+    await waitFor(() => {
+      const tests = calls.filter((c) => c.url === '/api/test-connection')
+      expect(tests.at(-1)!.body).toEqual({ hosts: ['10.0.0.2'] })
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Tüm cihazları göster' }))
+    expect(screen.getByLabelText('IP, satır 1')).toBeInTheDocument()
+  })
+  it('keeps a fixed but untested device in the retest set', async () => {
+    renderWithProviders(<DevicesStep />, { path: '/devices' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Tümünü test et' }))
+    await screen.findByRole('button', { name: 'Sadece sorunluları göster (1)' })
+    await userEvent.type(screen.getByLabelText('Şifre, satır 2'), 'x')
+    expect(await screen.findByText('Bilgileri düzeltilen 1 cihaz henüz test edilmedi. Tekrar test edin.')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: /Sorunluları tekrar test et/ })).toBeEnabled(), { timeout: 2000 })
+    await userEvent.click(screen.getByRole('button', { name: /Sorunluları tekrar test et/ }))
+    await waitFor(() => {
+      const tests = calls.filter((c) => c.url === '/api/test-connection')
+      expect(tests.at(-1)!.body).toEqual({ hosts: ['10.0.0.2'] })
+    })
+  })
   it('bulk-pastes new devices and skips known ones', async () => {
     renderWithProviders(<DevicesStep />, { path: '/devices' })
     await userEvent.click(await screen.findByRole('button', { name: 'Toplu ekle' }))

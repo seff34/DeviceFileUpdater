@@ -73,6 +73,17 @@ export function PreviewStep() {
   const ready = devices.isSuccess
   const gate = devices.isPending ? 'Cihazlar yükleniyor.' : !ready ? 'Cihazlar yüklenemedi.' : blocker('preview', facts)
   const t = report.data ? tally(report.data) : null
+  // The confirmation lives in the sticky action bar next to "Uygulamayı başlat", so a long
+  // matrix never hides it; the bar then drops the redundant "Değişiklikleri onaylayın." text.
+  const showConfirm = !!t && !previewRunning && !!previewId
+  const barBlocker = showConfirm && gate === 'Değişiklikleri onaylayın.' ? null : gate
+  const confirmBox = showConfirm ? (
+    <div className={cn('flex items-center gap-2', !fresh && 'opacity-60')}>
+      <Checkbox id="preview-ok" checked={previewConfirmed} disabled={!fresh} onCheckedChange={(v) => setPreviewConfirmed(v === true)} aria-describedby="preview-ok-desc" />
+      <Label htmlFor="preview-ok" className="text-sm font-normal">Değişiklikleri inceledim</Label>
+      <span id="preview-ok-desc" className="sr-only">{confirmText(t!)}</span>
+    </div>
+  ) : undefined
   const cancelledPreview = run?.state === 'done' && run.dry_run && !run.preview_id
   // The last dry run failed or was cancelled, so the matrix below is an older preview.
   const lastRunIncomplete = run?.state === 'done' && run.dry_run && !!run.preview_id && (!!run.error || run.report_id !== run.preview_id)
@@ -85,7 +96,9 @@ export function PreviewStep() {
         primaryLabel: 'Uygulamayı başlat',
         onPrimary: () => apply.mutate(),
         primaryBusy: apply.isPending,
-        blocker: gate,
+        primaryDisabled: showConfirm && !previewConfirmed,
+        blocker: barBlocker,
+        extra: confirmBox,
       }}
       aside={
         previewRunning ? (
@@ -93,7 +106,7 @@ export function PreviewStep() {
             <Stop aria-hidden /> Durdur
           </Button>
         ) : (
-          <Button variant={previewId ? 'outline' : 'default'} onClick={() => start.mutate()} disabled={!ready || start.isPending}>
+          <Button variant={previewId && fresh ? 'outline' : 'default'} onClick={() => start.mutate()} disabled={!ready || start.isPending}>
             {previewId ? <ArrowClockwise aria-hidden /> : <Play aria-hidden />}
             {previewId ? 'Önizlemeyi yeniden çalıştır' : 'Önizlemeyi başlat'}
           </Button>
@@ -140,7 +153,18 @@ export function PreviewStep() {
               </AlertDescription>
             </Alert>
           )}
-          <p className="text-base">{previewSentence(report.data)}</p>
+          <div>
+            <p className="text-base">{previewSentence(report.data)}</p>
+            {fresh && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t!.changedDevices
+                  ? 'Tabloyu inceleyin, sonra alttaki '
+                  : 'Cihazlara yazılacak dosya yok; uygulamak gerekmez. Yine de çalıştırmak isterseniz alttaki '}
+                <span className="font-medium text-foreground">Değişiklikleri inceledim</span> kutusunu işaretleyip uygulamayı başlatın.
+                {t!.unreachable > 0 && ` Ulaşılamayan ${t!.unreachable} cihaz raporda başarısız görünecek.`}
+              </p>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filtre">
             {FILTERS.map((f) => {
               const n = filterDevices(report.data, f.id).length
@@ -159,12 +183,6 @@ export function PreviewStep() {
             })}
           </div>
           <PreviewMatrix result={report.data} filter={filter} />
-          <div className={cn('flex items-start gap-3 rounded-md border bg-card p-4', !fresh && 'opacity-60')}>
-            <Checkbox id="preview-ok" checked={previewConfirmed} disabled={!fresh} onCheckedChange={(v) => setPreviewConfirmed(v === true)} className="mt-0.5" />
-            <Label htmlFor="preview-ok" className="text-sm leading-relaxed font-normal">
-              {confirmText(t!)}
-            </Label>
-          </div>
         </div>
       )}
     </StepPage>

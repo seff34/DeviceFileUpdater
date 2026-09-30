@@ -1,4 +1,4 @@
-import { CheckCircle, Circle, CircleNotch, XCircle } from '@phosphor-icons/react'
+import { CheckCircle, Circle, CircleNotch, Prohibit, XCircle } from '@phosphor-icons/react'
 import { explainError } from '@/lib/explain'
 import { memo, useMemo } from 'react'
 import { CANCELLED_TEXT, hasRealError, isCancelled } from '@/lib/summary'
@@ -9,22 +9,22 @@ import { cn } from '@/lib/utils'
 
 export type GridFilter = 'all' | 'failed'
 
-function StageCell({ stage }: { stage: DeviceView['stage'] }) {
+function StageCell({ stage, cancelled }: { stage: DeviceView['stage']; cancelled: boolean }) {
   const busy = stage !== 'queued' && stage !== 'done' && stage !== 'failed'
-  const Icon = stage === 'done' ? CheckCircle : stage === 'failed' ? XCircle : busy ? CircleNotch : Circle
+  const Icon = cancelled ? Prohibit : stage === 'done' ? CheckCircle : stage === 'failed' ? XCircle : busy ? CircleNotch : Circle
   return (
     // Keyed by stage so each change remounts the cell and replays the 150ms crossfade.
     <span
-      key={stage}
+      key={cancelled ? 'cancelled' : stage}
       className={cn(
         'stage-in inline-flex items-center gap-1.5',
         stage === 'done' && 'text-ok',
-        stage === 'failed' && 'text-fail',
+        stage === 'failed' && (cancelled ? 'text-same' : 'text-fail'),
         stage === 'queued' && 'text-muted-foreground',
       )}
     >
       <Icon size={16} weight={busy || stage === 'queued' ? 'regular' : 'bold'} className={cn(busy && 'text-primary')} aria-hidden />
-      {STAGE_LABEL[stage]}
+      {cancelled ? CANCELLED_TEXT : STAGE_LABEL[stage]}
     </span>
   )
 }
@@ -37,7 +37,12 @@ function fileSummary(files: FileResult[]): string {
 
 // The cell is one line: it shows the Turkish explanation and keeps the raw error in the tooltip.
 function detail(d: DeviceView): { text: string; tone?: string; raw?: string } {
-  if (isCancelled(d)) return { text: CANCELLED_TEXT, tone: 'text-fail' }
+  if (isCancelled(d)) {
+    if (d.stage !== 'failed') return { text: CANCELLED_TEXT }
+    // The stage column already says "İptal edildi"; here say what was left undone.
+    const finished = d.files.filter((f) => f.status !== 'FAILED')
+    return { text: finished.length ? `${fileSummary(finished)} · kalanı işlenmedi` : 'İşlenmedi' }
+  }
   if (hasRealError(d)) return { text: explainError(d.error) || d.error!, tone: 'text-fail', raw: d.error }
   const failed = d.files.find((f) => f.status === 'FAILED' && f.error !== 'cancelled')
   if (failed) return { text: `${failed.remote}: ${explainError(failed.error) || failed.error || 'başarısız'}`, tone: 'text-fail', raw: failed.error }
@@ -48,19 +53,20 @@ function detail(d: DeviceView): { text: string; tone?: string; raw?: string } {
 // applyEvent keeps the identity of untouched devices, so memo skips every row an event did not change.
 const RunRow = memo(function RunRow({ d }: { d: DeviceView }) {
   const det = detail(d)
+  const cancelled = d.stage === 'failed' && isCancelled(d)
   // A failed device counts only the files that succeeded, so "2/2" never means two failures.
   const done = d.stage === 'failed' ? d.files.filter((f) => f.status !== 'FAILED').length : d.done
   const ratio = d.total ? Math.min(done / d.total, 1) : 0
   return (
     <tr className="h-11">
       <th scope="row" className="truncate border-b px-3 text-left font-mono font-normal" title={d.host}>{d.host}</th>
-      <td className="truncate whitespace-nowrap border-b px-3"><StageCell stage={d.stage} /></td>
+      <td className="truncate whitespace-nowrap border-b px-3"><StageCell stage={d.stage} cancelled={cancelled} /></td>
       <td className="border-b px-3">
         <div className="flex items-center gap-2">
           <span className="w-14 font-mono text-xs tabular-nums">{d.total ? `${done}/${d.total}` : '-'}</span>
           <div className="h-1 flex-1 overflow-hidden rounded-md bg-muted" aria-hidden>
             <div
-              className={cn('h-full origin-left rounded-md transition-transform duration-200 ease-[var(--ease-out-strong)] motion-reduce:transition-none', d.stage === 'failed' ? 'bg-fail' : 'bg-primary')}
+              className={cn('h-full origin-left rounded-md transition-transform duration-200 ease-[var(--ease-out-strong)] motion-reduce:transition-none', cancelled ? 'bg-same' : d.stage === 'failed' ? 'bg-fail' : 'bg-primary')}
               style={{ transform: `scaleX(${ratio})` }}
             />
           </div>

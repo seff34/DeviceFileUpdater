@@ -34,6 +34,23 @@ describe('summary', () => {
     }
     expect(resultSentence(done)).toBe('2 cihazdan 1 tanesi başarılı, 1 tanesi başarısız. 1 dosya oluşturuldu, 1 dosya güncellendi, 1 dosya aynıydı, 1 dosya başarısız.')
   })
+  it('counts cancelled devices apart from failures', () => {
+    const cancelled = (host: string) => ({ host, duration_ms: 1, error: 'cancelled', files: [{ ...f('/a', 'FAILED'), error: 'cancelled' }] })
+    const done: RunResult = {
+      ...preview, dry_run: false,
+      devices: [
+        { host: 'h1', duration_ms: 1, files: [f('/a', 'CREATED')] },
+        { host: 'h2', duration_ms: 1, error: 'dial tcp: i/o timeout', files: [f('/a', 'FAILED')] },
+        cancelled('h3'),
+        cancelled('h4'),
+      ],
+    }
+    expect(resultSentence(done)).toBe('4 cihazdan 1 tanesi başarılı, 1 tanesi başarısız, 2 tanesi iptal edildi. 1 dosya oluşturuldu, 1 dosya başarısız.')
+  })
+  it('leaves out a zero success count', () => {
+    const done: RunResult = { ...preview, dry_run: false, devices: [{ host: 'h1', duration_ms: 1, error: 'cancelled', files: [] }] }
+    expect(resultSentence(done)).toBe('1 cihazdan 1 tanesi iptal edildi.')
+  })
   it('does not claim success for a report with no devices', () => {
     expect(resultSentence({ ...preview, dry_run: false, devices: [] })).toBe('Hiçbir cihaz işlenmedi.')
   })

@@ -14,7 +14,8 @@ export function useWizardFacts(previewConfirmed: boolean): { facts: WizardFacts;
   const ds = devices.data ?? []
   const es = manifest.data ?? []
   return {
-    loading: ws.isPending,
+    // Gate only on real facts: the dependent queries start after the workspace resolves.
+    loading: ws.isPending || (hasWs && [devices, manifest, settings, run].some((q) => q.isPending)),
     facts: {
       workspace: hasWs,
       devices: ds.length,

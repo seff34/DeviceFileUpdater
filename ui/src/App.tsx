@@ -25,9 +25,13 @@ const VIEWS: Record<StepId, () => JSX.Element> = {
   report: ReportStep,
 }
 
-/** First step the operator should be on: a running real run wins, else the first blocked step. */
+/**
+ * First step the operator should be on: a running real run wins, a finished
+ * real run opens its report, else the first blocked step.
+ */
 function landing(f: ReturnType<typeof useWizard>['facts']): string {
   if (f.run?.state === 'running' && !f.run.dry_run) return '/apply'
+  if (f.run?.state === 'done' && !f.run.dry_run) return '/report'
   const first = STEPS.find((s) => blocker(s.id, f) !== null)
   return (first ?? STEPS[STEPS.length - 1]).path
 }

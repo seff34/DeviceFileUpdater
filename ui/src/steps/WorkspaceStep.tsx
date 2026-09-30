@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/FolderBrowser'
 import { StepPage } from '@/components/StepPage'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { navigate } from '@/lib/router'
@@ -27,7 +28,11 @@ export function WorkspaceStep() {
   })
   const current = ws.data?.current ?? ''
   const recent = (ws.data?.recent ?? []).filter((p) => p !== current)
-  const showBrowser = !current || browsing
+  const showBrowser = !ws.isPending && !ws.isError && (!current || browsing)
+  const start = (v: { path: string; create: boolean }) => {
+    open.reset()
+    open.mutate(v)
+  }
 
   return (
     <StepPage step="workspace" action={{ onPrimary: () => navigate('/devices'), blocker: blocker('workspace', facts) }}>
@@ -39,8 +44,21 @@ export function WorkspaceStep() {
               <h2 id="ws-current" className="text-sm font-medium">Açık çalışma alanı</h2>
               <p className="truncate font-mono text-sm text-muted-foreground" title={current}>{current}</p>
             </div>
-            {!browsing && <Button variant="outline" onClick={() => setBrowsing(true)}>Başka klasör aç</Button>}
+            {!browsing && <Button variant="outline" onClick={() => { open.reset(); setBrowsing(true) }}>Başka klasör aç</Button>}
           </section>
+        )}
+
+        {ws.isPending && (
+          <div className="space-y-2" aria-busy="true">
+            <Skeleton className="h-16" />
+            <Skeleton className="h-40" />
+          </div>
+        )}
+
+        {ws.isError && (
+          <Alert variant="destructive">
+            <AlertDescription>{(ws.error as Error).message}</AlertDescription>
+          </Alert>
         )}
 
         {open.isError && (
@@ -60,7 +78,7 @@ export function WorkspaceStep() {
                   <button
                     type="button"
                     disabled={open.isPending}
-                    onClick={() => open.mutate({ path: p, create: false })}
+                    onClick={() => start({ path: p, create: false })}
                     className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-muted focus-visible:bg-muted outline-none disabled:opacity-60"
                   >
                     <FolderOpen size={16} className="shrink-0 text-muted-foreground" aria-hidden />
@@ -82,7 +100,7 @@ export function WorkspaceStep() {
                 <span className="font-mono">settings.json</span>, <span className="font-mono">files/</span> ve <span className="font-mono">reports/</span> eklenir. Var olan dosyalara dokunulmaz.
               </p>
             </div>
-            <FolderBrowser busy={open.isPending} onOpen={(path, create) => open.mutate({ path, create })} />
+            <FolderBrowser busy={open.isPending} onOpen={(path, create) => start({ path, create })} />
             {browsing && (
               <Button variant="ghost" className="mt-2" onClick={() => setBrowsing(false)}>Vazgeç</Button>
             )}

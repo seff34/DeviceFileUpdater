@@ -17,7 +17,15 @@ export function mockApi(routes: Record<string, Handler>): Call[] {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
     const method = init?.method ?? 'GET'
     let body: unknown = init?.body
-    if (typeof body === 'string') {
+    if (body instanceof FormData) {
+      const entries: Record<string, unknown> = {}
+      body.forEach((v, k) => {
+        const val = v instanceof File ? v.name : v
+        const prev = entries[k]
+        entries[k] = prev === undefined ? val : Array.isArray(prev) ? [...prev, val] : [prev, val]
+      })
+      body = entries
+    } else if (typeof body === 'string') {
       try {
         body = JSON.parse(body)
       } catch {

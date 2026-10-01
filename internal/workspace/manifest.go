@@ -2,7 +2,6 @@ package workspace
 
 import (
 	"crypto/sha256"
-	"encoding/csv"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -26,12 +25,11 @@ var manifestHeader = []string{"local_path", "remote_path", "mode"}
 var modeRe = regexp.MustCompile(`^[0-7]{3,4}$`)
 
 func readManifest(path string) ([]Entry, error) {
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	cr := csv.NewReader(f)
+	cr := newCSVReader(data)
 	cr.FieldsPerRecord = 3
 	rows, err := cr.ReadAll()
 	if err != nil {
@@ -40,8 +38,6 @@ func readManifest(path string) ([]Entry, error) {
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("manifest.csv: empty file")
 	}
-	// Strip BOM from first header cell if present
-	rows[0][0] = strings.TrimPrefix(rows[0][0], "\xef\xbb\xbf")
 	for i, h := range manifestHeader {
 		if strings.ToLower(strings.TrimSpace(rows[0][i])) != h {
 			return nil, fmt.Errorf("manifest.csv: header must be %s", strings.Join(manifestHeader, ","))
@@ -78,7 +74,10 @@ func LoadManifestDraft(path string) ([]Entry, error) {
 
 func SaveManifest(path string, es []Entry) error {
 	return writeAtomic(path, 0o644, func(w io.Writer) error {
-		cw := csv.NewWriter(w)
+		cw, err := newCSVWriter(w)
+		if err != nil {
+			return err
+		}
 		cw.Write(manifestHeader)
 		for _, e := range es {
 			cw.Write([]string{e.LocalPath, e.RemotePath, e.Mode})

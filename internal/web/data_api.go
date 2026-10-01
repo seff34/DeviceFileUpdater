@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -105,7 +106,8 @@ func (s *Server) exportDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	b, err := os.ReadFile(ws.DevicesPath())
 	if errors.Is(err, fs.ErrNotExist) {
-		b, err = []byte("ip,username,password\n"), nil
+		var buf bytes.Buffer
+		b, err = buf.Bytes(), workspace.WriteDevices(&buf, nil)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

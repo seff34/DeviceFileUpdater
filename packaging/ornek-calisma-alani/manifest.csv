@@ -1,2 +1,2 @@
-local_path,remote_path,mode
-files/uygulama.conf,/etc/uygulama/uygulama.conf,0644
+﻿local_path;remote_path;mode
+files/uygulama.conf;/etc/uygulama/uygulama.conf;0644

@@ -59,7 +59,7 @@ func TestSaveManifestAndSettingsAtomic(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(mp)
-	if !strings.Contains(string(b), "files/a,/opt/a,0755") {
+	if !strings.Contains(string(b), "\ufefflocal_path;remote_path;mode\nfiles/a;/opt/a;0755") {
 		t.Fatalf("manifest content: %q", b)
 	}
 	sp := filepath.Join(dir, "settings.json")

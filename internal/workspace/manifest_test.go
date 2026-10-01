@@ -72,6 +72,25 @@ func TestLoadManifestWithBOM(t *testing.T) {
 	}
 }
 
+// Excel in a Turkish locale saves with ';'; both workspace files must read it.
+func TestLoadSemicolonCSV(t *testing.T) {
+	dir := t.TempDir()
+	mp := filepath.Join(dir, "manifest.csv")
+	os.WriteFile(mp, []byte("\xef\xbb\xbflocal_path;remote_path;mode\r\nfiles/a.txt;/tmp/a.txt;0644\r\n"), 0o644)
+	es, err := LoadManifest(mp)
+	if err != nil || len(es) != 1 || es[0].RemotePath != "/tmp/a.txt" {
+		t.Fatalf("manifest: %+v %v", es, err)
+	}
+	dp := filepath.Join(dir, "devices.csv")
+	if err := SaveDevices(dp, []Device{{Host: "10.0.0.1", Username: "root", Password: "a;b,c"}}); err != nil {
+		t.Fatal(err)
+	}
+	ds, err := LoadDevices(dp)
+	if err != nil || len(ds) != 1 || ds[0].Password != "a;b,c" {
+		t.Fatalf("devices: %+v %v", ds, err)
+	}
+}
+
 // Control bytes in remote_path would corrupt the line-based shell protocol.
 func TestRemotePathControlBytesRejected(t *testing.T) {
 	for _, p := range []string{"/a\nb", "/a\rb", "/a\x00b", "/a\tb", "/a\x1b[2Jb", "/a\x7fb"} {

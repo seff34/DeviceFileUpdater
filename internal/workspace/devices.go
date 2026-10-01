@@ -1,8 +1,6 @@
 package workspace
 
 import (
-	"bytes"
-	"encoding/csv"
 	"fmt"
 	"io"
 	"net"
@@ -41,12 +39,7 @@ func ParseDevices(r io.Reader) ([]Device, error) {
 	if err != nil {
 		return nil, fmt.Errorf("devices.csv: %w", err)
 	}
-	cr := csv.NewReader(bytes.NewReader(data))
-	// Excel in many locales saves CSV with ';'. A header with ';' and no ','
-	// can only be that form, so switch separators.
-	if header, _, _ := strings.Cut(string(data), "\n"); strings.Contains(header, ";") && !strings.Contains(header, ",") {
-		cr.Comma = ';'
-	}
+	cr := newCSVReader(data)
 	cr.FieldsPerRecord = 3
 	rows, err := cr.ReadAll()
 	if err != nil {
@@ -55,8 +48,6 @@ func ParseDevices(r io.Reader) ([]Device, error) {
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("devices.csv: empty file")
 	}
-	// Strip BOM from first header cell if present
-	rows[0][0] = strings.TrimPrefix(rows[0][0], "\xef\xbb\xbf")
 	for i, h := range deviceHeader {
 		if strings.ToLower(strings.TrimSpace(rows[0][i])) != h {
 			return nil, fmt.Errorf("devices.csv: header must be %s", strings.Join(deviceHeader, ","))
@@ -101,13 +92,7 @@ func SaveDevices(path string, ds []Device) error {
 		os.Remove(f.Name())
 		return err
 	}
-	w := csv.NewWriter(f)
-	w.Write(deviceHeader)
-	for _, d := range ds {
-		w.Write([]string{d.Host, d.Username, d.Password})
-	}
-	w.Flush()
-	if err := w.Error(); err != nil {
+	if err := WriteDevices(f, ds); err != nil {
 		f.Close()
 		os.Remove(f.Name())
 		return err
@@ -118,6 +103,20 @@ func SaveDevices(path string, ds []Device) error {
 	}
 	// Atomic rename
 	return os.Rename(f.Name(), path)
+}
+
+// WriteDevices writes ds in the devices.csv format (see csvfmt.go).
+func WriteDevices(w io.Writer, ds []Device) error {
+	cw, err := newCSVWriter(w)
+	if err != nil {
+		return err
+	}
+	cw.Write(deviceHeader)
+	for _, d := range ds {
+		cw.Write([]string{d.Host, d.Username, d.Password})
+	}
+	cw.Flush()
+	return cw.Error()
 }
 
 // ValidateDevices applies the devices.csv rules to an edited list. Row numbers

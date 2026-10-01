@@ -52,7 +52,7 @@ func TestDevicesRoundTrip(t *testing.T) {
 		t.Fatalf("saved: %+v", got.Devices)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "devices.csv"))
-	if !strings.Contains(string(b), `10.0.0.1,root,"p,w;1"`) {
+	if !strings.Contains(string(b), `10.0.0.1;root;"p,w;1"`) {
 		t.Fatalf("csv: %q", b)
 	}
 	var e struct{ Error string }
@@ -90,7 +90,7 @@ func TestDevicesImportExport(t *testing.T) {
 	resp, _ = c.Get(ts.URL + "/api/devices/export")
 	body, _ = io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if !strings.Contains(resp.Header.Get("Content-Disposition"), "devices.csv") || !strings.Contains(string(body), "10.0.0.9,u,pw") {
+	if !strings.Contains(resp.Header.Get("Content-Disposition"), "devices.csv") || !strings.Contains(string(body), "\ufeffip;username;password\n10.0.0.9;u;pw") {
 		t.Fatalf("export: %q %q", resp.Header.Get("Content-Disposition"), body)
 	}
 }

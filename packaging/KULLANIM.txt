@@ -94,16 +94,18 @@ dosyalarını elle düzenlemek zorunlu değildir.
 ------------------
 
   devices.csv
-    ip,username,password
-    192.168.1.101,root,sifre
-    192.168.1.103:2222,admin,sifre     (standart dışı port)
+    ip;username;password
+    192.168.1.101;root;sifre
+    192.168.1.103:2222;admin;sifre     (standart dışı port)
 
   manifest.csv
-    local_path,remote_path,mode
-    files/uygulama.conf,/etc/uygulama/uygulama.conf,0644
+    local_path;remote_path;mode
+    files/uygulama.conf;/etc/uygulama/uygulama.conf;0644
 
-  - Excel ile düzenleyebilirsiniz. Türkçe Excel'in ";" ile ayırdığı
-    dosyalar da kabul edilir.
+  - Dosyalar Türkçe Excel'in beklediği biçimde (";" ile ayrılmış)
+    yazılır; Excel'de çift tıklayınca her alan ayrı sütunda açılır.
+    Excel'de düzenleyip "CSV" olarak kaydedebilirsiniz. "," ile
+    ayrılmış dosyalar da kabul edilir.
   - remote_path cihazdaki tam yoldur ve "/" ile başlar.
   - mode boş bırakılırsa var olan dosyanın izni korunur.
 

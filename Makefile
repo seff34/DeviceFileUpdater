@@ -29,7 +29,8 @@ e2e: e2e-check ui-build
 	cd ui && npx playwright test
 
 # One ready-to-hand-over folder and zip per platform: the binary, the operator
-# guide and an example workspace from packaging/.
+# guide and an example workspace from packaging/, and LICENSE (MIT requires the
+# notice in every copy).
 release: ui
 	rm -rf dist && mkdir -p dist
 	for t in $(TARGETS); do \
@@ -38,6 +39,7 @@ release: ui
 	  mkdir -p dist/$$pkg && \
 	  CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "-s -w" \
 	    -o dist/$$pkg/devupdater$$ext ./cmd/devupdater && \
-	  cp -R packaging/. dist/$$pkg/ && \
+	  cp -R packaging/. dist/$$pkg/ && cp LICENSE dist/$$pkg/ && \
 	  (cd dist && zip -qr $$pkg.zip $$pkg -x "*.DS_Store") || exit 1; \
 	done
+	cd dist && shasum -a 256 *.zip > SHA256SUMS.txt

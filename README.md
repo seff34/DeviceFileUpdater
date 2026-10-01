@@ -127,3 +127,7 @@ docs/                tasarım belgesi ve uygulama planları
 ```
 
 Ürün ve tasarım ilkeleri [`PRODUCT.md`](PRODUCT.md) ve [`DESIGN.md`](DESIGN.md) içindedir.
+
+## Lisans
+
+[MIT](LICENSE)

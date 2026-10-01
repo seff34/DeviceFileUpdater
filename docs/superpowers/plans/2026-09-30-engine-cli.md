@@ -85,7 +85,7 @@ Makefile                          test, integration, release
 - [ ] **Step 1: Init module**
 
 ```bash
-cd /Users/sefaerenakdogan/Workspace/pdks/DeviceFileUpdater
+cd DeviceFileUpdater
 go mod init devupdater
 go mod edit -go=1.25
 printf 'dist/\nweb/node_modules/\n*.test\n' > .gitignore
@@ -1416,7 +1416,7 @@ git commit -m "feat: telnet transport with IAC handling and login"
 - [ ] **Step 1: Add dependencies**
 
 ```bash
-cd /Users/sefaerenakdogan/Workspace/pdks/DeviceFileUpdater
+cd DeviceFileUpdater
 go get golang.org/x/crypto/ssh github.com/pkg/sftp
 ```
 
@@ -2551,7 +2551,7 @@ SCP and FTP are exercised by the Docker integration suite (Task 14); no unit fak
 - [ ] **Step 1: Add dependency**
 
 ```bash
-cd /Users/sefaerenakdogan/Workspace/pdks/DeviceFileUpdater
+cd DeviceFileUpdater
 go get github.com/jlaffaye/ftp
 ```
 
